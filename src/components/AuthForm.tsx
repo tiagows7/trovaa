@@ -2,11 +2,9 @@
 
 import { useActionState, useEffect, useState } from "react";
 import Link from "next/link";
-import {
-  loginAction,
-  signupAction,
-  type AuthActionState,
-} from "@/lib/auth/actions";
+import { useRouter } from "next/navigation";
+import { signupAction, type AuthActionState } from "@/lib/auth/actions";
+import { formatAuthError } from "@/lib/auth/errors";
 import { getSupabaseConfigError } from "@/lib/supabase/config";
 
 type ProfileGender = "masculino" | "feminino" | "outro";
@@ -34,10 +32,7 @@ type AuthFormProps = {
 };
 
 export function AuthForm({ mode }: AuthFormProps) {
-  const [loginState, loginActionBound, loginPending] = useActionState<
-    AuthActionState,
-    FormData
-  >(loginAction, null);
+  const router = useRouter();
   const [signupState, signupActionBound, signupPending] = useActionState<
     AuthActionState,
     FormData
@@ -47,6 +42,8 @@ export function AuthForm({ mode }: AuthFormProps) {
   const [gender, setGender] = useState<ProfileGender | "">("");
   const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [configError, setConfigError] = useState<string | null>(null);
+  const [loginError, setLoginError] = useState<string | null>(null);
+  const [loginPending, setLoginPending] = useState(false);
 
   useEffect(() => {
     const configIssue = getSupabaseConfigError();
@@ -59,15 +56,60 @@ export function AuthForm({ mode }: AuthFormProps) {
     mode === "signup" && (!acceptedTerms || !birthDate || !gender);
 
   const pending = mode === "signup" ? signupPending : loginPending;
-  const loginError =
-    typeof loginState?.error === "string" ? loginState.error : null;
   const signupError =
     typeof signupState?.error === "string" ? signupState.error : null;
   const errorMessage = mode === "signup" ? signupError : loginError;
 
+  async function handleLogin(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setLoginError(null);
+    setLoginPending(true);
+
+    const form = event.currentTarget;
+    const formData = new FormData(form);
+    const email = String(formData.get("email") ?? "").trim();
+    const password = String(formData.get("password") ?? "");
+
+    if (!email || !password) {
+      setLoginError("E-mail e senha são obrigatórios.");
+      setLoginPending(false);
+      return;
+    }
+
+    try {
+      const response = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+      });
+
+      let payload: { error?: string } | null = null;
+      try {
+        payload = (await response.json()) as { error?: string };
+      } catch {
+        payload = null;
+      }
+
+      if (!response.ok) {
+        setLoginError(
+          formatAuthError(payload?.error, "E-mail ou senha incorretos.")
+        );
+        setLoginPending(false);
+        return;
+      }
+
+      router.push("/salas");
+      router.refresh();
+    } catch (caught) {
+      setLoginError(formatAuthError(caught));
+      setLoginPending(false);
+    }
+  }
+
   return (
     <form
-      action={mode === "signup" ? signupActionBound : loginActionBound}
+      action={mode === "signup" ? signupActionBound : undefined}
+      onSubmit={mode === "login" ? handleLogin : undefined}
       className="flex w-full max-w-md flex-col gap-4"
     >
       {mode === "signup" && (
