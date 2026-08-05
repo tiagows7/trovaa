@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
 import { ForgotPasswordForm } from "@/components/auth/ForgotPasswordForm";
 import { Logo } from "@/components/Logo";
 import { createClient } from "@/lib/supabase/server";
@@ -17,10 +16,6 @@ export default async function ForgotPasswordPage({
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (user) {
-    redirect("/salas");
-  }
-
   return (
     <div className="relative flex min-h-dvh flex-col items-center justify-center overflow-hidden bg-gradient-to-br from-fuchsia-50 via-white to-cyan-50 px-6 py-12 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950">
       <div className="relative w-full max-w-sm space-y-8">
@@ -35,6 +30,20 @@ export default async function ForgotPasswordPage({
         </div>
 
         <div className="rounded-3xl border border-white/80 bg-white/90 p-6 shadow-xl shadow-violet-100/60 backdrop-blur dark:border-slate-800 dark:bg-slate-900/90">
+          {user && (
+            <p className="mb-4 rounded-lg bg-violet-50 px-3 py-2 text-sm text-violet-800 dark:bg-violet-950/40 dark:text-violet-200">
+              Você está conectado como{" "}
+              <span className="font-medium">{user.email}</span>. Informe o e-mail
+              abaixo para receber o link de redefinição, ou{" "}
+              <Link
+                href="/salas"
+                className="font-medium text-violet-600 hover:underline dark:text-violet-300"
+              >
+                volte às salas
+              </Link>
+              .
+            </p>
+          )}
           {params.error === "link-invalido" && (
             <p className="mb-4 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
               O link de recuperação expirou ou é inválido. Solicite um novo abaixo.
