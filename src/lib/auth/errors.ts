@@ -51,5 +51,13 @@ function mapKnownAuthMessages(message: string) {
     return "Conta ainda não confirmada. Rode supabase/disable-email-confirmation.sql no Supabase.";
   }
 
+  if (message.includes("For security purposes, you can only request this after")) {
+    return "Aguarde alguns segundos antes de solicitar outro e-mail de recuperação.";
+  }
+
+  if (message.includes("Password should be at least")) {
+    return "A senha deve ter pelo menos 6 caracteres.";
+  }
+
   return message;
 }

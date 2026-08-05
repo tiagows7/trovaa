@@ -197,6 +197,14 @@ export function AuthForm({ mode }: AuthFormProps) {
           className="rounded-xl border border-zinc-400 dark:border-slate-500 bg-white px-4 py-3 text-zinc-900 outline-none ring-violet-500 focus:ring-2"
           required
         />
+        {mode === "login" && (
+          <Link
+            href="/login/esqueci-senha"
+            className="mt-1 self-end text-xs font-medium text-violet-600 hover:underline dark:text-violet-300"
+          >
+            Esqueci minha senha
+          </Link>
+        )}
       </label>
 
       {mode === "signup" && (
