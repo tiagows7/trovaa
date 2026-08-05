@@ -1,9 +1,32 @@
 "use client";
 
-import { useState } from "react";
+import { useActionState, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { signupAction, type AuthActionState } from "@/lib/auth/actions";
+import { formatAuthError } from "@/lib/auth/errors";
 import { createClient } from "@/lib/supabase/client";
+import { getSupabaseConfigError } from "@/lib/supabase/config";
+
+type ProfileGender = "masculino" | "feminino" | "outro";
+
+const GENDER_OPTIONS: { value: ProfileGender; label: string }[] = [
+  { value: "masculino", label: "Masculino" },
+  { value: "feminino", label: "Feminino" },
+  { value: "outro", label: "Outro" },
+];
+
+function getMinBirthDate() {
+  const date = new Date();
+  date.setFullYear(date.getFullYear() - 120);
+  return date.toISOString().slice(0, 10);
+}
+
+function getMaxBirthDate() {
+  const date = new Date();
+  date.setFullYear(date.getFullYear() - 13);
+  return date.toISOString().slice(0, 10);
+}
 
 type AuthFormProps = {
   mode: "login" | "signup";
@@ -11,82 +34,142 @@ type AuthFormProps = {
 
 export function AuthForm({ mode }: AuthFormProps) {
   const router = useRouter();
-  const supabase = createClient();
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [username, setUsername] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const supabase = useMemo(() => createClient(), []);
+  const [signupState, signupActionBound, signupPending] = useActionState<
+    AuthActionState,
+    FormData
+  >(signupAction, null);
 
-  async function handleSubmit(event: React.FormEvent) {
+  const [loginError, setLoginError] = useState<string | null>(null);
+  const [loginPending, setLoginPending] = useState(false);
+
+  const [birthDate, setBirthDate] = useState("");
+  const [gender, setGender] = useState<ProfileGender | "">("");
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
+  const [configError, setConfigError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const configIssue = getSupabaseConfigError();
+    if (configIssue) {
+      setConfigError(configIssue);
+    }
+  }, []);
+
+  const signupIncomplete =
+    mode === "signup" && (!acceptedTerms || !birthDate || !gender);
+
+  const pending = mode === "signup" ? signupPending : loginPending;
+  const signupError =
+    typeof signupState?.error === "string" ? signupState.error : null;
+  const errorMessage = mode === "signup" ? signupError : loginError;
+
+  async function handleLogin(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setLoading(true);
-    setError(null);
+    setLoginError(null);
+    setLoginPending(true);
 
-    if (mode === "signup") {
-      const { data, error: signUpError } = await supabase.auth.signUp({
-        email,
-        password,
-      });
+    const form = event.currentTarget;
+    const formData = new FormData(form);
+    const email = String(formData.get("email") ?? "").trim();
+    const password = String(formData.get("password") ?? "");
 
-      if (signUpError) {
-        setError(signUpError.message);
-        setLoading(false);
-        return;
-      }
-
-      if (data.user) {
-        const { error: profileError } = await supabase.from("profiles").insert({
-          id: data.user.id,
-          username: username.trim() || email.split("@")[0],
-        });
-
-        if (profileError) {
-          setError(profileError.message);
-          setLoading(false);
-          return;
-        }
-      }
-    } else {
-      const { error: signInError } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
-
-      if (signInError) {
-        setError(signInError.message);
-        setLoading(false);
-        return;
-      }
+    if (!email || !password) {
+      setLoginError("E-mail e senha são obrigatórios.");
+      setLoginPending(false);
+      return;
     }
 
-    router.push("/chat");
-    router.refresh();
+    try {
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
+
+      if (error) {
+        setLoginError(formatAuthError(error));
+        setLoginPending(false);
+        return;
+      }
+
+      router.push("/salas");
+      router.refresh();
+    } catch (caught) {
+      setLoginError(formatAuthError(caught));
+      setLoginPending(false);
+    }
   }
 
   return (
-    <form onSubmit={handleSubmit} className="flex w-full max-w-sm flex-col gap-4">
+    <form
+      action={mode === "signup" ? signupActionBound : undefined}
+      onSubmit={mode === "login" ? handleLogin : undefined}
+      className="flex w-full max-w-md flex-col gap-4"
+    >
       {mode === "signup" && (
         <label className="flex flex-col gap-1.5 text-sm">
           <span className="font-medium text-zinc-700">Nome de usuário</span>
           <input
             type="text"
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
+            name="username"
             placeholder="Como você quer aparecer no chat"
+            autoComplete="username"
+            suppressHydrationWarning
             className="rounded-xl border border-zinc-200 bg-white px-4 py-3 text-zinc-900 outline-none ring-violet-500 focus:ring-2"
             required
           />
         </label>
       )}
 
+      {mode === "signup" && (
+        <>
+          <label className="flex flex-col gap-1.5 text-sm">
+            <span className="font-medium text-zinc-700">Data de nascimento</span>
+            <input
+              type="date"
+              name="birthDate"
+              value={birthDate}
+              onChange={(e) => setBirthDate(e.target.value)}
+              min={getMinBirthDate()}
+              max={getMaxBirthDate()}
+              required
+              className="rounded-xl border border-zinc-200 bg-white px-4 py-3 text-zinc-900 outline-none ring-violet-500 focus:ring-2"
+            />
+          </label>
+
+          <fieldset className="flex flex-col gap-2 text-sm">
+            <legend className="font-medium text-zinc-700">Sexo</legend>
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+              {GENDER_OPTIONS.map((option) => (
+                <label
+                  key={option.value}
+                  className={`flex cursor-pointer items-center justify-center rounded-xl border px-4 py-3 transition ${
+                    gender === option.value
+                      ? "border-violet-500 bg-violet-50 text-violet-700 ring-2 ring-violet-500"
+                      : "border-zinc-200 bg-white text-zinc-700 hover:border-violet-200"
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="gender"
+                    value={option.value}
+                    checked={gender === option.value}
+                    onChange={() => setGender(option.value)}
+                    className="sr-only"
+                    required
+                  />
+                  {option.label}
+                </label>
+              ))}
+            </div>
+          </fieldset>
+        </>
+      )}
+
       <label className="flex flex-col gap-1.5 text-sm">
         <span className="font-medium text-zinc-700">E-mail</span>
         <input
           type="email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
+          name="email"
           placeholder="seu@email.com"
+          autoComplete="email"
+          suppressHydrationWarning
           className="rounded-xl border border-zinc-200 bg-white px-4 py-3 text-zinc-900 outline-none ring-violet-500 focus:ring-2"
           required
         />
@@ -96,28 +179,69 @@ export function AuthForm({ mode }: AuthFormProps) {
         <span className="font-medium text-zinc-700">Senha</span>
         <input
           type="password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
+          name="password"
           placeholder="Mínimo 6 caracteres"
           minLength={6}
+          autoComplete={mode === "signup" ? "new-password" : "current-password"}
+          suppressHydrationWarning
           className="rounded-xl border border-zinc-200 bg-white px-4 py-3 text-zinc-900 outline-none ring-violet-500 focus:ring-2"
           required
         />
       </label>
 
-      {error && (
+      {mode === "signup" && (
+        <label className="flex items-start gap-3 text-sm text-zinc-600">
+          <input
+            type="checkbox"
+            name="acceptedTerms"
+            checked={acceptedTerms}
+            onChange={(e) => setAcceptedTerms(e.target.checked)}
+            className="mt-1 h-4 w-4 shrink-0 rounded border-zinc-300 text-violet-600 focus:ring-violet-500"
+            required
+          />
+          <span>
+            Li e aceito os{" "}
+            <Link
+              href="/termos-de-uso"
+              target="_blank"
+              className="font-medium text-violet-600 hover:underline"
+            >
+              Termos de Uso
+            </Link>{" "}
+            e a{" "}
+            <Link
+              href="/politica-de-privacidade"
+              target="_blank"
+              className="font-medium text-violet-600 hover:underline"
+            >
+              Política de Privacidade
+            </Link>
+            .
+          </span>
+        </label>
+      )}
+
+      {configError && (
+        <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+          {configError}
+        </p>
+      )}
+
+      {errorMessage && (
         <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">
-          {error}
+          {errorMessage}
         </p>
       )}
 
       <button
         type="submit"
-        disabled={loading}
-        className="rounded-xl bg-violet-600 px-4 py-3 font-semibold text-white transition hover:bg-violet-700 disabled:opacity-60"
+        disabled={pending || signupIncomplete}
+        className="rounded-xl bg-gradient-to-r from-fuchsia-600 to-violet-600 px-4 py-3 font-semibold text-white transition hover:brightness-110 disabled:opacity-60"
       >
-        {loading
-          ? "Aguarde..."
+        {pending
+          ? mode === "signup"
+            ? "Criando conta..."
+            : "Entrando..."
           : mode === "signup"
             ? "Criar conta"
             : "Entrar"}

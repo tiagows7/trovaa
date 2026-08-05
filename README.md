@@ -1,36 +1,61 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Trovaa
 
-## Getting Started
+MVP de bate-papo em tempo real com **Next.js** + **Supabase**.
 
-First, run the development server:
+## O que já vem pronto
+
+- Landing page
+- Cadastro e login com e-mail/senha
+- Sala de chat geral
+- Mensagens em tempo real (Supabase Realtime)
+- Histórico das últimas 100 mensagens
+
+## Configuração (5 minutos)
+
+### 1. Criar projeto no Supabase
+
+1. Acesse [supabase.com](https://supabase.com) e crie um projeto gratuito
+2. Vá em **SQL Editor** e execute o conteúdo de `supabase/schema.sql`
+3. Em **Database → Replication**, confirme que a tabela `messages` está com Realtime ativo
+4. Em **Authentication → Providers**, mantenha **Email** habilitado
+
+### 2. Variáveis de ambiente
+
+Copie o exemplo e preencha com os dados do seu projeto:
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+cp .env.local.example .env.local
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+No painel do Supabase: **Project Settings → API**
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+- `NEXT_PUBLIC_SUPABASE_URL` → Project URL
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY` → anon public key
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+### 3. Rodar localmente
 
-## Learn More
+```bash
+npm install
+npm run dev
+```
 
-To learn more about Next.js, take a look at the following resources:
+Abra [http://localhost:3000](http://localhost:3000)
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Estrutura
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+```
+src/
+  app/           # páginas (/, /login, /signup, /chat)
+  components/    # AuthForm, ChatRoom
+  lib/supabase/  # clientes browser e server
+supabase/
+  schema.sql     # tabelas e políticas RLS
+```
 
-## Deploy on Vercel
+## Próximos passos (quando quiser evoluir)
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- Salas privadas ou múltiplas salas
+- Login com Google
+- Envio de imagens
+- Status online / “digitando…”
+- Deploy na Vercel
