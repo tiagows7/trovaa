@@ -121,7 +121,7 @@ export function AuthForm({ mode }: AuthFormProps) {
             placeholder="Como você quer aparecer no chat"
             autoComplete="username"
             suppressHydrationWarning
-            className="rounded-xl border border-zinc-200 bg-white px-4 py-3 text-zinc-900 outline-none ring-violet-500 focus:ring-2"
+            className="rounded-xl border border-zinc-400 dark:border-slate-500 bg-white px-4 py-3 text-zinc-900 outline-none ring-violet-500 focus:ring-2"
             required
           />
         </label>
@@ -139,7 +139,7 @@ export function AuthForm({ mode }: AuthFormProps) {
               min={getMinBirthDate()}
               max={getMaxBirthDate()}
               required
-              className="rounded-xl border border-zinc-200 bg-white px-4 py-3 text-zinc-900 outline-none ring-violet-500 focus:ring-2"
+              className="rounded-xl border border-zinc-400 dark:border-slate-500 bg-white px-4 py-3 text-zinc-900 outline-none ring-violet-500 focus:ring-2"
             />
           </label>
 
@@ -152,7 +152,7 @@ export function AuthForm({ mode }: AuthFormProps) {
                   className={`flex cursor-pointer items-center justify-center rounded-xl border px-4 py-3 transition ${
                     gender === option.value
                       ? "border-violet-500 bg-violet-50 text-violet-700 ring-2 ring-violet-500"
-                      : "border-zinc-200 bg-white text-zinc-700 hover:border-violet-200"
+                      : "border-zinc-400 dark:border-slate-500 bg-white text-zinc-700 hover:border-violet-200"
                   }`}
                 >
                   <input
@@ -180,7 +180,7 @@ export function AuthForm({ mode }: AuthFormProps) {
           placeholder="seu@email.com"
           autoComplete="email"
           suppressHydrationWarning
-          className="rounded-xl border border-zinc-200 bg-white px-4 py-3 text-zinc-900 outline-none ring-violet-500 focus:ring-2"
+          className="rounded-xl border border-zinc-400 dark:border-slate-500 bg-white px-4 py-3 text-zinc-900 outline-none ring-violet-500 focus:ring-2"
           required
         />
       </label>
@@ -194,7 +194,7 @@ export function AuthForm({ mode }: AuthFormProps) {
           minLength={6}
           autoComplete={mode === "signup" ? "new-password" : "current-password"}
           suppressHydrationWarning
-          className="rounded-xl border border-zinc-200 bg-white px-4 py-3 text-zinc-900 outline-none ring-violet-500 focus:ring-2"
+          className="rounded-xl border border-zinc-400 dark:border-slate-500 bg-white px-4 py-3 text-zinc-900 outline-none ring-violet-500 focus:ring-2"
           required
         />
       </label>

@@ -72,7 +72,7 @@ export function ProfileSettingsForm({
           {GENDER_OPTIONS.map((option) => (
             <label
               key={option.value}
-              className="flex cursor-pointer items-center justify-center rounded-xl border border-slate-200 bg-white px-4 py-3 text-slate-900 transition has-checked:border-violet-500 has-checked:bg-violet-50 has-checked:text-violet-700 has-checked:ring-2 has-checked:ring-violet-500"
+              className="flex cursor-pointer items-center justify-center rounded-xl border border-slate-400 bg-white px-4 py-3 text-slate-900 transition has-checked:border-violet-500 has-checked:bg-violet-50 has-checked:text-violet-700 has-checked:ring-2 has-checked:ring-violet-500 dark:border-slate-500 dark:bg-slate-900 dark:text-slate-100"
             >
               <input
                 type="radio"
@@ -102,7 +102,7 @@ export function ProfileSettingsForm({
         />
       </label>
 
-      <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-950/40">
+      <div className="rounded-2xl border border-slate-400 bg-slate-50 p-4 dark:border-slate-500 dark:bg-slate-950/40">
         <p className="text-sm font-medium text-slate-800 dark:text-slate-100">
           Alterar senha
         </p>

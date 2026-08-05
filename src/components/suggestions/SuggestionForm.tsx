@@ -25,7 +25,7 @@ export function SuggestionForm() {
           maxLength={2000}
           required
           placeholder="Conte o que podemos melhorar no Trovaa: novas funções, ajustes no chat, ideias para VIP..."
-          className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-slate-900 outline-none ring-violet-500 focus:ring-2 dark:border-slate-700 dark:bg-slate-900 dark:text-white"
+          className="rounded-2xl border border-slate-400 bg-white px-4 py-3 text-slate-900 outline-none ring-violet-500 focus:ring-2 dark:border-slate-500 dark:bg-slate-900 dark:text-white"
         />
       </label>
 

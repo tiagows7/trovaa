@@ -27,6 +27,13 @@ input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="
 textarea,
 select {
   color: var(--foreground);
+  border-color: #94a3b8;
+}
+
+.dark input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="hidden"]),
+.dark textarea,
+.dark select {
+  border-color: #64748b;
 }
 
 input::placeholder,
@@ -46,7 +53,11 @@ textarea::placeholder {
   caret-color: #171717 !important;
   font-weight: 500;
   background-color: #ffffff !important;
-  border-color: #d4d4d8 !important;
+  border-color: #94a3b8 !important;
+}
+
+.dark .chat-message-input {
+  border-color: #64748b !important;
 }
 
 .chat-message-input::placeholder {
@@ -68,7 +79,11 @@ textarea::placeholder {
   -webkit-text-fill-color: #171717 !important;
   caret-color: #171717 !important;
   background-color: #ffffff !important;
-  border-color: #e2e8f0 !important;
+  border-color: #94a3b8 !important;
+}
+
+.dark .profile-form-input {
+  border-color: #64748b !important;
 }
 
 .profile-form-input::placeholder {
