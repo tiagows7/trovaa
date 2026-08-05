@@ -1,11 +1,12 @@
 "use client";
 
-import { useActionState, useEffect, useMemo, useState } from "react";
+import { useActionState, useEffect, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { signupAction, type AuthActionState } from "@/lib/auth/actions";
-import { formatAuthError } from "@/lib/auth/errors";
-import { createClient } from "@/lib/supabase/client";
+import {
+  loginAction,
+  signupAction,
+  type AuthActionState,
+} from "@/lib/auth/actions";
 import { getSupabaseConfigError } from "@/lib/supabase/config";
 
 type ProfileGender = "masculino" | "feminino" | "outro";
@@ -33,15 +34,14 @@ type AuthFormProps = {
 };
 
 export function AuthForm({ mode }: AuthFormProps) {
-  const router = useRouter();
-  const supabase = useMemo(() => createClient(), []);
+  const [loginState, loginActionBound, loginPending] = useActionState<
+    AuthActionState,
+    FormData
+  >(loginAction, null);
   const [signupState, signupActionBound, signupPending] = useActionState<
     AuthActionState,
     FormData
   >(signupAction, null);
-
-  const [loginError, setLoginError] = useState<string | null>(null);
-  const [loginPending, setLoginPending] = useState(false);
 
   const [birthDate, setBirthDate] = useState("");
   const [gender, setGender] = useState<ProfileGender | "">("");
@@ -59,47 +59,15 @@ export function AuthForm({ mode }: AuthFormProps) {
     mode === "signup" && (!acceptedTerms || !birthDate || !gender);
 
   const pending = mode === "signup" ? signupPending : loginPending;
+  const loginError =
+    typeof loginState?.error === "string" ? loginState.error : null;
   const signupError =
     typeof signupState?.error === "string" ? signupState.error : null;
   const errorMessage = mode === "signup" ? signupError : loginError;
 
-  async function handleLogin(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setLoginError(null);
-    setLoginPending(true);
-
-    const form = event.currentTarget;
-    const formData = new FormData(form);
-    const email = String(formData.get("email") ?? "").trim();
-    const password = String(formData.get("password") ?? "");
-
-    if (!email || !password) {
-      setLoginError("E-mail e senha são obrigatórios.");
-      setLoginPending(false);
-      return;
-    }
-
-    try {
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
-
-      if (error) {
-        setLoginError(formatAuthError(error));
-        setLoginPending(false);
-        return;
-      }
-
-      router.push("/salas");
-      router.refresh();
-    } catch (caught) {
-      setLoginError(formatAuthError(caught));
-      setLoginPending(false);
-    }
-  }
-
   return (
     <form
-      action={mode === "signup" ? signupActionBound : undefined}
-      onSubmit={mode === "login" ? handleLogin : undefined}
+      action={mode === "signup" ? signupActionBound : loginActionBound}
       className="flex w-full max-w-md flex-col gap-4"
     >
       {mode === "signup" && (

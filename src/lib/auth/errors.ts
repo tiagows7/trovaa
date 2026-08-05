@@ -43,6 +43,10 @@ function mapKnownAuthMessages(message: string) {
     return "Conta de teste com problema no banco. Rode supabase/fix-test-users-login.sql no Supabase.";
   }
 
+  if (message === "Failed to fetch" || message.includes("fetch failed")) {
+    return "Não foi possível conectar ao servidor de autenticação. Verifique sua internet e tente novamente.";
+  }
+
   if (message === "Email not confirmed") {
     return "Conta ainda não confirmada. Rode supabase/disable-email-confirmation.sql no Supabase.";
   }
