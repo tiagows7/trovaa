@@ -13,6 +13,7 @@ import {
 import { usePathname } from "next/navigation";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/client";
+import { useSupabaseRealtimeAuth } from "@/hooks/useSupabaseRealtimeAuth";
 
 const PLATFORM_PRESENCE_CHANNEL = "platform:online";
 
@@ -62,6 +63,7 @@ function mergeLobbyState(
 export function PlatformPresenceProvider({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const supabase = useMemo(() => createClient(), []);
+  useSupabaseRealtimeAuth(supabase);
   const [userId, setUserId] = useState("");
   const [onlineUsers, setOnlineUsers] = useState<Map<string, string | null>>(
     new Map()

@@ -13,6 +13,7 @@ import {
 import { usePathname } from "next/navigation";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/client";
+import { useSupabaseRealtimeAuth } from "@/hooks/useSupabaseRealtimeAuth";
 import type { ProfileGender } from "@/types/database";
 import type { PresenceUser } from "@/hooks/useStatePresence";
 
@@ -129,6 +130,7 @@ function getActiveStateFromPath(pathname: string) {
 export function StatePresenceProvider({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const supabase = useMemo(() => createClient(), []);
+  useSupabaseRealtimeAuth(supabase);
   const [presenceStatus, setPresenceStatus] = useState<
     "idle" | "connecting" | "connected" | "error"
   >("idle");
@@ -297,13 +299,8 @@ export function StatePresenceProvider({ children }: { children: ReactNode }) {
       const normalizedState = stateCode.toUpperCase();
       const existing = channelsRef.current.get(normalizedState);
 
-      if (existing && subscribedStatesRef.current.has(normalizedState)) {
-        return existing;
-      }
-
       if (existing) {
-        void supabase.removeChannel(existing);
-        channelsRef.current.delete(normalizedState);
+        return existing;
       }
 
       const channel = supabase.channel(`state:${normalizedState}`, {
@@ -351,7 +348,8 @@ export function StatePresenceProvider({ children }: { children: ReactNode }) {
               (ownersByStateRef.current.has(normalizedState) ||
                 activeStateCodeRef.current === normalizedState)
             ) {
-              ensureChannel(normalizedState, presenceKey);
+              channelsRef.current.delete(normalizedState);
+              ensureChannel(normalizedState, userIdRef.current || presenceKey);
             }
           }, 2000);
         }
@@ -391,13 +389,13 @@ export function StatePresenceProvider({ children }: { children: ReactNode }) {
       }
 
       const presenceKey = payload?.userId ?? userIdRef.current;
-      if (presenceKey && isActiveRoute) {
+      if (presenceKey && isActiveRouteRef.current) {
         ensureChannel(normalizedState, presenceKey);
       }
 
       void applyTrack(normalizedState);
     },
-    [applyTrack, ensureChannel, isActiveRoute]
+    [applyTrack, ensureChannel]
   );
 
   useEffect(() => {
@@ -486,18 +484,22 @@ export function StatePresenceProvider({ children }: { children: ReactNode }) {
       void syncVersion;
       const normalizedState = stateCode.toUpperCase();
 
-      if (userIdRef.current && isActiveRoute) {
+      if (userIdRef.current && isActiveRouteRef.current) {
         ensureChannel(normalizedState, userIdRef.current);
       }
 
       const channel = channelsRef.current.get(normalizedState);
-      if (!channel || !subscribedStatesRef.current.has(normalizedState)) {
+      if (!channel) {
+        return [];
+      }
+
+      if (!subscribedStatesRef.current.has(normalizedState)) {
         return [];
       }
 
       return readOnlineUsers(channel, viewerUserId);
     },
-    [ensureChannel, isActiveRoute, syncVersion]
+    [ensureChannel, syncVersion]
   );
 
   const subscribePresenceSync = useCallback((listener: () => void) => {

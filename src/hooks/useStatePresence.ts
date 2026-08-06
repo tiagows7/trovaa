@@ -23,6 +23,7 @@ export function useStatePresence(
     useStatePresenceContext();
   const { reportLobbyState } = usePlatformPresence();
   const [onlineUsers, setOnlineUsers] = useState<PresenceUser[]>([]);
+  const lobbyReady = isStateLobbyReady(stateCode);
 
   const ownerKey = useMemo(
     () => `match:${stateCode.toUpperCase()}`,
@@ -98,12 +99,12 @@ export function useStatePresence(
       unsubscribe();
       window.clearInterval(interval);
     };
-  }, [getOnlineUsers, isStateLobbyReady, presenceStatus, stateCode, subscribePresenceSync, userId]);
+  }, [getOnlineUsers, lobbyReady, presenceStatus, stateCode, subscribePresenceSync, userId]);
 
   const effectiveStatus =
     !stateCode || !userId || !gender
       ? ("idle" as const)
-      : isStateLobbyReady(stateCode)
+      : lobbyReady
         ? ("connected" as const)
         : presenceStatus === "error"
           ? ("error" as const)
