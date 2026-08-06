@@ -23,6 +23,13 @@ export function formatAuthError(error: unknown, fallback = "Não foi possível e
     }
 
     if (
+      authError.error_code === "over_email_send_rate_limit" ||
+      authError.code === "over_email_send_rate_limit"
+    ) {
+      return EMAIL_RATE_LIMIT_MESSAGE;
+    }
+
+    if (
       authError.error_code === "unexpected_failure" ||
       authError.code === "unexpected_failure" ||
       authError.status === 500
@@ -33,6 +40,9 @@ export function formatAuthError(error: unknown, fallback = "Não foi possível e
 
   return fallback;
 }
+
+const EMAIL_RATE_LIMIT_MESSAGE =
+  "Limite de envio de e-mails atingido. No plano gratuito do Supabase são permitidos cerca de 2 e-mails por hora (cadastro, recuperação etc.). Aguarde até 1 hora e tente novamente, ou configure SMTP customizado no painel do Supabase.";
 
 function mapKnownAuthMessages(message: string) {
   if (message === "Invalid login credentials") {
@@ -57,6 +67,13 @@ function mapKnownAuthMessages(message: string) {
 
   if (message.includes("Password should be at least")) {
     return "A senha deve ter pelo menos 6 caracteres.";
+  }
+
+  if (
+    message.includes("email rate limit exceeded") ||
+    message.includes("over_email_send_rate_limit")
+  ) {
+    return EMAIL_RATE_LIMIT_MESSAGE;
   }
 
   return message;

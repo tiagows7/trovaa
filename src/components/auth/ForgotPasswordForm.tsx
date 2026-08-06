@@ -1,14 +1,45 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { formatAuthError } from "@/lib/auth/errors";
+
+const RESEND_COOLDOWN_SECONDS = 60;
+
+function getCooldownKey(email: string) {
+  return `trovaa:forgot-password:${email.trim().toLowerCase()}`;
+}
 
 export function ForgotPasswordForm() {
   const [email, setEmail] = useState("");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [cooldownSeconds, setCooldownSeconds] = useState(0);
+
+  useEffect(() => {
+    if (cooldownSeconds <= 0) return;
+
+    const timer = window.setInterval(() => {
+      setCooldownSeconds((current) => Math.max(0, current - 1));
+    }, 1000);
+
+    return () => window.clearInterval(timer);
+  }, [cooldownSeconds]);
+
+  useEffect(() => {
+    const normalizedEmail = email.trim().toLowerCase();
+    if (!normalizedEmail) {
+      setCooldownSeconds(0);
+      return;
+    }
+
+    const storedUntil = Number(
+      window.localStorage.getItem(getCooldownKey(normalizedEmail)) ?? 0
+    );
+    const remaining = Math.ceil((storedUntil - Date.now()) / 1000);
+    setCooldownSeconds(Math.max(0, remaining));
+  }, [email]);
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -20,6 +51,12 @@ export function ForgotPasswordForm() {
 
     if (!normalizedEmail) {
       setError("Informe seu e-mail.");
+      setPending(false);
+      return;
+    }
+
+    if (cooldownSeconds > 0) {
+      setError(`Aguarde ${cooldownSeconds}s antes de solicitar outro e-mail.`);
       setPending(false);
       return;
     }
@@ -42,6 +79,10 @@ export function ForgotPasswordForm() {
         return;
       }
 
+      const until = Date.now() + RESEND_COOLDOWN_SECONDS * 1000;
+      window.localStorage.setItem(getCooldownKey(normalizedEmail), String(until));
+      setCooldownSeconds(RESEND_COOLDOWN_SECONDS);
+
       setSuccess(
         payload.message ??
           "Se existir uma conta com este e-mail, enviamos um link para redefinir a senha."
@@ -52,6 +93,8 @@ export function ForgotPasswordForm() {
       setPending(false);
     }
   }
+
+  const submitDisabled = pending || Boolean(success) || cooldownSeconds > 0;
 
   return (
     <form onSubmit={handleSubmit} className="flex w-full max-w-md flex-col gap-4">
@@ -87,10 +130,14 @@ export function ForgotPasswordForm() {
 
       <button
         type="submit"
-        disabled={pending || Boolean(success)}
+        disabled={submitDisabled}
         className="rounded-xl bg-gradient-to-r from-fuchsia-600 to-violet-600 px-4 py-3 font-semibold text-white transition hover:brightness-110 disabled:opacity-60"
       >
-        {pending ? "Enviando..." : "Enviar link de recuperação"}
+        {pending
+          ? "Enviando..."
+          : cooldownSeconds > 0
+            ? `Aguarde ${cooldownSeconds}s`
+            : "Enviar link de recuperação"}
       </button>
 
       <p className="text-center text-sm text-zinc-500 dark:text-slate-400">

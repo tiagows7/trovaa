@@ -30,9 +30,13 @@ export async function POST(request: Request) {
     });
 
     if (error) {
+      const isRateLimit =
+        error.code === "over_email_send_rate_limit" ||
+        error.message?.includes("email rate limit exceeded");
+
       return NextResponse.json(
         { error: formatAuthError(error) },
-        { status: 400 }
+        { status: isRateLimit ? 429 : 400 }
       );
     }
 
