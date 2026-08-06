@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import type { RealtimeChannel } from "@supabase/supabase-js";
 import { usePlatformPresence } from "@/contexts/PlatformPresenceContext";
-import { useStatePresenceContext } from "@/contexts/StatePresenceContext";
+import { createClient, prepareSupabaseRealtimeAuth } from "@/lib/supabase/client";
 import type { ProfileGender } from "@/types/database";
 
 export type PresenceUser = {
@@ -12,6 +13,40 @@ export type PresenceUser = {
   inConversation?: boolean;
 };
 
+type PresencePayload = {
+  user_id?: string;
+  gender?: ProfileGender;
+  looking_for?: ProfileGender | null;
+  in_conversation?: boolean;
+};
+
+function readOnlineUsers(
+  channel: RealtimeChannel,
+  viewerUserId: string
+): PresenceUser[] {
+  const state = channel.presenceState<PresencePayload>();
+  const byId = new Map<string, PresenceUser>();
+
+  for (const presences of Object.values(state)) {
+    for (const presence of presences) {
+      if (
+        presence.user_id &&
+        presence.gender &&
+        presence.user_id !== viewerUserId
+      ) {
+        byId.set(presence.user_id, {
+          userId: presence.user_id,
+          gender: presence.gender,
+          lookingFor: presence.looking_for ?? null,
+          inConversation: presence.in_conversation ?? false,
+        });
+      }
+    }
+  }
+
+  return Array.from(byId.values());
+}
+
 export function useStatePresence(
   stateCode: string,
   userId: string,
@@ -19,97 +54,147 @@ export function useStatePresence(
   lookingFor: ProfileGender | null = null,
   options?: { inConversation?: boolean }
 ) {
-  const { getOnlineUsers, updatePresence, presenceStatus, subscribePresenceSync, isStateLobbyReady } =
-    useStatePresenceContext();
+  const supabase = useMemo(() => createClient(), []);
   const { reportLobbyState } = usePlatformPresence();
   const [onlineUsers, setOnlineUsers] = useState<PresenceUser[]>([]);
-  const lobbyReady = isStateLobbyReady(stateCode);
+  const [presenceStatus, setPresenceStatus] = useState<
+    "idle" | "connecting" | "connected" | "error"
+  >("idle");
+
+  const channelRef = useRef<RealtimeChannel | null>(null);
+  const subscribedRef = useRef(false);
 
   const ownerKey = useMemo(
     () => `match:${stateCode.toUpperCase()}`,
     [stateCode]
   );
 
-  useLayoutEffect(() => {
-    if (!stateCode || !userId || !gender) return;
+  const normalizedState = stateCode.toUpperCase();
 
-    updatePresence(ownerKey, stateCode, {
-      userId,
-      gender,
-      lookingFor,
-      inConversation: options?.inConversation ?? false,
-    });
-    reportLobbyState(ownerKey, stateCode);
+  useEffect(() => {
+    if (!stateCode || !userId || !gender) {
+      setOnlineUsers([]);
+      setPresenceStatus("idle");
+      return;
+    }
+
+    let active = true;
+
+    function refreshOnlineUsers() {
+      if (!channelRef.current || !subscribedRef.current) return;
+      setOnlineUsers(readOnlineUsers(channelRef.current, userId));
+    }
+
+    async function connect() {
+      setPresenceStatus("connecting");
+
+      const authed = await prepareSupabaseRealtimeAuth(supabase);
+      if (!active) return;
+
+      if (!authed) {
+        setPresenceStatus("error");
+        return;
+      }
+
+      const channel = supabase.channel(`state:${normalizedState}`, {
+        config: { presence: { key: userId } },
+      });
+
+      channel.on("presence", { event: "sync" }, refreshOnlineUsers);
+      channel.on("presence", { event: "join" }, refreshOnlineUsers);
+      channel.on("presence", { event: "leave" }, refreshOnlineUsers);
+
+      channel.subscribe(async (status: string) => {
+        if (!active) return;
+
+        if (status === "SUBSCRIBED") {
+          subscribedRef.current = true;
+          setPresenceStatus("connected");
+
+          try {
+            await channel.track({
+              user_id: userId,
+              gender,
+              looking_for: lookingFor,
+              state_code: normalizedState,
+              in_conversation: options?.inConversation ?? false,
+            });
+          } catch {
+            setPresenceStatus("error");
+            return;
+          }
+
+          refreshOnlineUsers();
+          return;
+        }
+
+        if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+          subscribedRef.current = false;
+          setPresenceStatus("error");
+        }
+      });
+
+      channelRef.current = channel;
+      reportLobbyState(ownerKey, normalizedState);
+    }
+
+    void connect();
+
+    const interval = window.setInterval(refreshOnlineUsers, 2000);
+
+    return () => {
+      active = false;
+      subscribedRef.current = false;
+      window.clearInterval(interval);
+      reportLobbyState(ownerKey, null);
+
+      const channel = channelRef.current;
+      if (channel) {
+        void channel.untrack().catch(() => undefined);
+        supabase.removeChannel(channel);
+        channelRef.current = null;
+      }
+
+      setOnlineUsers([]);
+      setPresenceStatus("idle");
+    };
   }, [
     gender,
     lookingFor,
+    normalizedState,
     options?.inConversation,
     ownerKey,
     reportLobbyState,
     stateCode,
-    updatePresence,
+    supabase,
     userId,
   ]);
 
   useEffect(() => {
-    if (!stateCode || !userId || !gender) return;
-    if (!lobbyReady && presenceStatus !== "connected") return;
+    if (!subscribedRef.current || !channelRef.current || !gender) return;
 
-    updatePresence(ownerKey, stateCode, {
-      userId,
-      gender,
-      lookingFor,
-      inConversation: options?.inConversation ?? false,
-    });
+    void channelRef.current
+      .track({
+        user_id: userId,
+        gender,
+        looking_for: lookingFor,
+        state_code: normalizedState,
+        in_conversation: options?.inConversation ?? false,
+      })
+      .then(() => {
+        if (channelRef.current) {
+          setOnlineUsers(readOnlineUsers(channelRef.current, userId));
+        }
+      })
+      .catch(() => undefined);
   }, [
     gender,
-    lobbyReady,
     lookingFor,
+    normalizedState,
     options?.inConversation,
-    ownerKey,
-    presenceStatus,
-    stateCode,
-    updatePresence,
     userId,
+    presenceStatus,
   ]);
 
-  useEffect(() => {
-    if (!stateCode || !userId) return;
-
-    return () => {
-      updatePresence(ownerKey, stateCode, null);
-      reportLobbyState(ownerKey, null);
-    };
-  }, [ownerKey, reportLobbyState, stateCode, updatePresence, userId]);
-
-  useEffect(() => {
-    if (!stateCode || !userId) {
-      setOnlineUsers([]);
-      return;
-    }
-
-    const refresh = () => {
-      setOnlineUsers(getOnlineUsers(stateCode, userId));
-    };
-
-    refresh();
-    const unsubscribe = subscribePresenceSync(refresh);
-    const interval = window.setInterval(refresh, 2000);
-
-    return () => {
-      unsubscribe();
-      window.clearInterval(interval);
-    };
-  }, [getOnlineUsers, lobbyReady, presenceStatus, stateCode, subscribePresenceSync, userId]);
-
-  const effectiveStatus =
-    !stateCode || !userId || !gender
-      ? ("idle" as const)
-      : lobbyReady
-        ? ("connected" as const)
-        : presenceStatus === "error"
-          ? ("error" as const)
-          : ("connecting" as const);
-
-  return { onlineUsers, presenceStatus: effectiveStatus };
+  return { onlineUsers, presenceStatus };
 }

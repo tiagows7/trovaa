@@ -447,7 +447,7 @@ export function StatePresenceProvider({ children }: { children: ReactNode }) {
   );
 
   const bootstrapPresence = useCallback(() => {
-    if (!isActiveRouteRef.current) {
+    if (!isActiveRouteRef.current || ownersByStateRef.current.size === 0) {
       return;
     }
 
@@ -468,10 +468,6 @@ export function StatePresenceProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    if (activeStateCodeRef.current) {
-      ensureChannel(activeStateCodeRef.current, presenceKey);
-    }
-
     for (const stateCode of ownersByStateRef.current.keys()) {
       ensureChannel(stateCode, presenceKey);
       void applyTrack(stateCode);
@@ -485,7 +481,9 @@ export function StatePresenceProvider({ children }: { children: ReactNode }) {
 
   const updatePresence = useCallback(
     (ownerKey: string, stateCode: string, payload: TrackPayload | null) => {
-      if (!stateCode) return;
+      if (!stateCode || ownerKey.startsWith("match:")) {
+        return;
+      }
 
       const normalizedState = stateCode.toUpperCase();
       let owners =
@@ -600,8 +598,8 @@ export function StatePresenceProvider({ children }: { children: ReactNode }) {
       void syncVersion;
       const normalizedState = stateCode.toUpperCase();
 
-      const presenceKey = userIdRef.current || viewerUserId;
-      if (presenceKey && isActiveRouteRef.current) {
+      const presenceKey = userIdRef.current;
+      if (presenceKey && isActiveRouteRef.current && ownersByStateRef.current.has(normalizedState)) {
         ensureChannel(normalizedState, presenceKey);
       }
 
