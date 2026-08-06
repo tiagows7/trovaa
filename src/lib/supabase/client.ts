@@ -2,6 +2,8 @@ import { createBrowserClient } from "@supabase/ssr";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 let browserClient: SupabaseClient | undefined;
+let cachedAccessToken: string | undefined;
+let authSyncPromise: Promise<boolean> | undefined;
 
 export function createClient() {
   if (browserClient) {
@@ -16,26 +18,51 @@ export function createClient() {
   return browserClient;
 }
 
+export function resetSupabaseRealtimeAuthCache() {
+  cachedAccessToken = undefined;
+  authSyncPromise = undefined;
+}
+
 export async function prepareSupabaseRealtimeAuth(client: SupabaseClient) {
-  let {
+  const {
     data: { session },
   } = await client.auth.getSession();
 
-  if (!session?.access_token) {
-    const {
-      data: { user },
-    } = await client.auth.getUser();
-
-    if (user) {
-      const refreshed = await client.auth.refreshSession();
-      session = refreshed.data.session ?? session;
+  const accessToken = session?.access_token;
+  if (accessToken) {
+    if (cachedAccessToken === accessToken) {
+      return true;
     }
+
+    await client.realtime.setAuth(accessToken);
+    cachedAccessToken = accessToken;
+    return true;
   }
 
-  if (!session?.access_token) {
-    return false;
+  if (!authSyncPromise) {
+    authSyncPromise = (async () => {
+      const {
+        data: { user },
+      } = await client.auth.getUser();
+
+      if (!user) {
+        return false;
+      }
+
+      const refreshed = await client.auth.refreshSession();
+      const refreshedToken = refreshed.data.session?.access_token;
+
+      if (!refreshedToken) {
+        return false;
+      }
+
+      await client.realtime.setAuth(refreshedToken);
+      cachedAccessToken = refreshedToken;
+      return true;
+    })().finally(() => {
+      authSyncPromise = undefined;
+    });
   }
 
-  await client.realtime.setAuth(session.access_token);
-  return true;
+  return authSyncPromise;
 }

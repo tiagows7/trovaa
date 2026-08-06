@@ -308,15 +308,44 @@ export function StatePresenceProvider({ children }: { children: ReactNode }) {
 
   const scheduleTrackRetries = useCallback(
     (stateCode: string) => {
-      for (const delay of [0, 250, 750, 1500, 3000, 5000]) {
+      for (const delay of [0, 500, 1500, 3000]) {
         window.setTimeout(() => {
           void applyTrack(stateCode);
-          applyAllOwnedTracks();
           notifySync();
         }, delay);
       }
     },
-    [applyAllOwnedTracks, applyTrack, notifySync]
+    [applyTrack, notifySync]
+  );
+
+  const removeChannelForState = useCallback(
+    async (normalizedState: string) => {
+      pendingChannelsRef.current.delete(normalizedState);
+      subscribedStatesRef.current.delete(normalizedState);
+
+      const channel = channelsRef.current.get(normalizedState);
+      if (!channel) return;
+
+      channelsRef.current.delete(normalizedState);
+      try {
+        await channel.untrack();
+      } catch {
+        // ignore
+      }
+      try {
+        await supabase.removeChannel(channel);
+      } catch {
+        // ignore
+      }
+
+      setReadyStates((current) => {
+        if (!current.has(normalizedState)) return current;
+        const next = new Set(current);
+        next.delete(normalizedState);
+        return next;
+      });
+    },
+    [supabase]
   );
 
   const ensureChannel = useCallback(
@@ -328,8 +357,12 @@ export function StatePresenceProvider({ children }: { children: ReactNode }) {
       const normalizedState = stateCode.toUpperCase();
       const existing = channelsRef.current.get(normalizedState);
 
-      if (existing) {
+      if (existing && subscribedStatesRef.current.has(normalizedState)) {
         return existing;
+      }
+
+      if (existing) {
+        void removeChannelForState(normalizedState);
       }
 
       if (pendingChannelsRef.current.has(normalizedState)) {
@@ -343,8 +376,15 @@ export function StatePresenceProvider({ children }: { children: ReactNode }) {
         try {
           await prepareSupabaseRealtimeAuth(supabase);
 
-          if (channelsRef.current.has(normalizedState)) {
+          if (
+            channelsRef.current.has(normalizedState) &&
+            subscribedStatesRef.current.has(normalizedState)
+          ) {
             return;
+          }
+
+          if (channelsRef.current.has(normalizedState)) {
+            await removeChannelForState(normalizedState);
           }
 
           const channel = supabase.channel(`state:${normalizedState}`, {
@@ -361,6 +401,8 @@ export function StatePresenceProvider({ children }: { children: ReactNode }) {
             notifySync();
           });
 
+          channelsRef.current.set(normalizedState, channel);
+
           channel.subscribe((status: string) => {
             if (status === "SUBSCRIBED") {
               pendingChannelsRef.current.delete(normalizedState);
@@ -372,33 +414,22 @@ export function StatePresenceProvider({ children }: { children: ReactNode }) {
             }
 
             if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
-              pendingChannelsRef.current.delete(normalizedState);
-              subscribedStatesRef.current.delete(normalizedState);
-              channelsRef.current.delete(normalizedState);
-              void supabase.removeChannel(channel);
-              setReadyStates((current) => {
-                if (!current.has(normalizedState)) {
-                  return current;
-                }
-
-                const next = new Set(current);
-                next.delete(normalizedState);
-                return next;
+              void removeChannelForState(normalizedState).then(() => {
+                window.setTimeout(() => {
+                  if (
+                    isActiveRouteRef.current &&
+                    (ownersByStateRef.current.has(normalizedState) ||
+                      activeStateCodeRef.current === normalizedState)
+                  ) {
+                    ensureChannel(
+                      normalizedState,
+                      userIdRef.current || presenceKey
+                    );
+                  }
+                }, 2000);
               });
-
-              window.setTimeout(() => {
-                if (
-                  isActiveRouteRef.current &&
-                  (ownersByStateRef.current.has(normalizedState) ||
-                    activeStateCodeRef.current === normalizedState)
-                ) {
-                  ensureChannel(normalizedState, userIdRef.current || presenceKey);
-                }
-              }, 2000);
             }
           });
-
-          channelsRef.current.set(normalizedState, channel);
         } catch {
           pendingChannelsRef.current.delete(normalizedState);
         }
@@ -406,7 +437,13 @@ export function StatePresenceProvider({ children }: { children: ReactNode }) {
 
       return null;
     },
-    [applyAllOwnedTracks, applyTrack, markStateReady, notifySync, scheduleTrackRetries, supabase]
+    [
+      markStateReady,
+      notifySync,
+      removeChannelForState,
+      scheduleTrackRetries,
+      supabase,
+    ]
   );
 
   const bootstrapPresence = useCallback(() => {
@@ -484,24 +521,9 @@ export function StatePresenceProvider({ children }: { children: ReactNode }) {
 
     bootstrapPresence();
 
-    let ticks = 0;
     const interval = window.setInterval(() => {
-      ticks += 1;
       bootstrapPresence();
-      if (ticks >= 30) {
-        window.clearInterval(interval);
-      }
-    }, 1000);
-
-    return () => {
-      window.clearInterval(interval);
-    };
-  }, [authReady, activeStateCode, bootstrapPresence, isActiveRoute, userId]);
-
-  useEffect(() => {
-    if (!isActiveRoute) {
-      return;
-    }
+    }, 3000);
 
     function handleVisibilityChange() {
       if (document.visibilityState === "visible") {
@@ -510,24 +532,12 @@ export function StatePresenceProvider({ children }: { children: ReactNode }) {
     }
 
     document.addEventListener("visibilitychange", handleVisibilityChange);
-    return () => {
-      document.removeEventListener("visibilitychange", handleVisibilityChange);
-    };
-  }, [bootstrapPresence, isActiveRoute]);
-
-  useEffect(() => {
-    if (!isActiveRoute || !userId) {
-      return;
-    }
-
-    const interval = window.setInterval(() => {
-      bootstrapPresence();
-    }, 5000);
 
     return () => {
       window.clearInterval(interval);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
-  }, [bootstrapPresence, isActiveRoute, userId]);
+  }, [authReady, activeStateCode, bootstrapPresence, isActiveRoute, userId]);
 
   useEffect(() => {
     if (isActiveRoute) {
