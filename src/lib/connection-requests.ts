@@ -86,6 +86,21 @@ export async function fetchPendingOutgoingRequest(
   return data ? mapConnectionRequest(data as ConnectionRequestRow) : null;
 }
 
+export async function fetchConnectionRequestById(
+  supabase: SupabaseClient,
+  requestId: string
+): Promise<ConnectionRequest | null> {
+  const { data } = await supabase
+    .from("connection_requests")
+    .select(
+      "id, requester_id, target_id, state_code, status, conversation_id, created_at, responded_at"
+    )
+    .eq("id", requestId)
+    .maybeSingle();
+
+  return data ? mapConnectionRequest(data as ConnectionRequestRow) : null;
+}
+
 export async function requestConnection(
   supabase: SupabaseClient,
   targetId: string,

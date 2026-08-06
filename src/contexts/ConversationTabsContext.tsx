@@ -201,17 +201,28 @@ export function ConversationTabsProvider({ children }: { children: ReactNode }) 
       if (!userId) return false;
 
       const roles = await loadUserProfileRoles(supabase, userId);
-      const tab = await loadConversationTabMeta(
-        supabase,
-        conversationId,
-        userId,
-        roles.isVip
-      );
 
-      if (!tab) return false;
+      for (let attempt = 0; attempt < 5; attempt += 1) {
+        const tab = await loadConversationTabMeta(
+          supabase,
+          conversationId,
+          userId,
+          roles.isVip
+        );
 
-      openAndActivate(tab, { replace: !roles.isVip });
-      return true;
+        if (tab) {
+          openAndActivate(tab, { replace: !roles.isVip });
+          return true;
+        }
+
+        if (attempt < 4) {
+          await new Promise((resolve) => {
+            window.setTimeout(resolve, 250 * (attempt + 1));
+          });
+        }
+      }
+
+      return false;
     },
     [openAndActivate, supabase, userId]
   );

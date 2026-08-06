@@ -18,6 +18,7 @@ import {
   acceptConnection,
   cancelConnectionRequest,
   declineConnection,
+  fetchConnectionRequestById,
   fetchPendingIncomingRequest,
   fetchPendingOutgoingRequest,
   mapConnectionRequest,
@@ -61,7 +62,13 @@ export function ConnectionRequestsProvider({ children }: { children: ReactNode }
   const [actingOnRequestId, setActingOnRequestId] = useState<string | null>(null);
 
   const viewerIsVipRef = useRef(viewerIsVip);
+  const openConversationByIdRef = useRef(openConversationById);
+  const outgoingRequestRef = useRef<ConnectionRequest | null>(null);
+  const openedConversationsRef = useRef(new Set<string>());
+
   viewerIsVipRef.current = viewerIsVip;
+  openConversationByIdRef.current = openConversationById;
+  outgoingRequestRef.current = outgoingRequest;
 
   useEffect(() => {
     let active = true;
@@ -85,13 +92,44 @@ export function ConnectionRequestsProvider({ children }: { children: ReactNode }
     };
   }, [supabase]);
 
+  const handleAcceptedConnection = useCallback(async (conversationId: string) => {
+    if (!conversationId || openedConversationsRef.current.has(conversationId)) {
+      return;
+    }
+
+    const opened = await openConversationByIdRef.current(conversationId);
+    if (opened) {
+      openedConversationsRef.current.add(conversationId);
+    }
+  }, []);
+
   const refreshRequests = useCallback(async () => {
     if (!userId) return;
+
+    const previousOutgoing = outgoingRequestRef.current;
 
     const [incoming, outgoing] = await Promise.all([
       fetchPendingIncomingRequest(supabase, userId),
       fetchPendingOutgoingRequest(supabase, userId),
     ]);
+
+    if (
+      previousOutgoing &&
+      !outgoing &&
+      previousOutgoing.status === "pending"
+    ) {
+      const resolved = await fetchConnectionRequestById(
+        supabase,
+        previousOutgoing.id
+      );
+
+      if (
+        resolved?.status === "accepted" &&
+        resolved.conversationId
+      ) {
+        await handleAcceptedConnection(resolved.conversationId);
+      }
+    }
 
     setIncomingRequest(incoming);
     setOutgoingRequest(outgoing);
@@ -130,10 +168,13 @@ export function ConnectionRequestsProvider({ children }: { children: ReactNode }
         )
       );
     }
-  }, [supabase, userId]);
+  }, [handleAcceptedConnection, supabase, userId]);
 
   const refreshRequestsRef = useRef(refreshRequests);
   refreshRequestsRef.current = refreshRequests;
+
+  const handleAcceptedConnectionRef = useRef(handleAcceptedConnection);
+  handleAcceptedConnectionRef.current = handleAcceptedConnection;
 
   useEffect(() => {
     if (!ready || !userId) {
@@ -181,7 +222,7 @@ export function ConnectionRequestsProvider({ children }: { children: ReactNode }
           request.conversationId &&
           payload.eventType !== "DELETE"
         ) {
-          void openConversationById(request.conversationId);
+          void handleAcceptedConnectionRef.current(request.conversationId);
         }
       }
     );
@@ -229,6 +270,18 @@ export function ConnectionRequestsProvider({ children }: { children: ReactNode }
     };
   }, [ready, supabase, userId]);
 
+  useEffect(() => {
+    if (!outgoingRequest) return;
+
+    const interval = window.setInterval(() => {
+      void refreshRequestsRef.current();
+    }, 2000);
+
+    return () => {
+      window.clearInterval(interval);
+    };
+  }, [outgoingRequest?.id]);
+
   const acceptIncoming = useCallback(async () => {
     if (!incomingRequest) return;
 
@@ -237,11 +290,11 @@ export function ConnectionRequestsProvider({ children }: { children: ReactNode }
     try {
       const conversationId = await acceptConnection(supabase, incomingRequest.id);
       setIncomingRequest(null);
-      await openConversationById(conversationId);
+      await handleAcceptedConnection(conversationId);
     } finally {
       setActingOnRequestId(null);
     }
-  }, [incomingRequest, openConversationById, supabase]);
+  }, [handleAcceptedConnection, incomingRequest, supabase]);
 
   const declineIncoming = useCallback(async () => {
     if (!incomingRequest) return;
