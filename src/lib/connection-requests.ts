@@ -108,6 +108,7 @@ export async function requestConnection(
 ): Promise<RequestConnectionResult> {
   const response = await fetch("/api/connections/request", {
     method: "POST",
+    credentials: "include",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ targetId, stateCode }),
   });
@@ -142,6 +143,7 @@ export async function acceptConnection(
 ): Promise<string> {
   const response = await fetch("/api/connections/accept", {
     method: "POST",
+    credentials: "include",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ requestId }),
   });

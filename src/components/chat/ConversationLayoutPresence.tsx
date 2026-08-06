@@ -51,6 +51,14 @@ export function ConversationLayoutPresence() {
         conversation.ended_at ||
         !profile?.gender
       ) {
+        if (active && conversation?.ended_at) {
+          const endedState = conversation.state_code?.toUpperCase();
+          if (endedState) {
+            reportLobbyState(ownerKey, null);
+            updatePresence(ownerKey, endedState, null);
+          }
+          stateCodeRef.current = null;
+        }
         return;
       }
 

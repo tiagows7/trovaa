@@ -41,13 +41,19 @@ export function ConversationRoutePresence({
     let active = true;
 
     async function validatePresence() {
-      const { data: conversation } = await supabase
+      const { data: conversation, error } = await supabase
         .from("conversations")
         .select("ended_at")
         .eq("id", conversationId)
         .maybeSingle();
 
-      if (!active || !conversation || conversation.ended_at) {
+      if (!active) return;
+
+      if (error || !conversation) {
+        return;
+      }
+
+      if (conversation.ended_at) {
         reportLobbyState(ownerKey, null);
         updatePresence(ownerKey, normalizedState, null);
         trackedRef.current = false;

@@ -344,6 +344,16 @@ export function StatePresenceProvider({ children }: { children: ReactNode }) {
             next.delete(normalizedState);
             return next;
           });
+
+          window.setTimeout(() => {
+            if (
+              isActiveRouteRef.current &&
+              (ownersByStateRef.current.has(normalizedState) ||
+                activeStateCodeRef.current === normalizedState)
+            ) {
+              ensureChannel(normalizedState, presenceKey);
+            }
+          }, 2000);
         }
       });
 
@@ -391,16 +401,33 @@ export function StatePresenceProvider({ children }: { children: ReactNode }) {
   );
 
   useEffect(() => {
-    function handlePageHide() {
-      void clearPresence();
+    if (!isActiveRoute || !userId) {
+      return;
     }
 
-    window.addEventListener("pagehide", handlePageHide);
+    const interval = window.setInterval(() => {
+      if (activeStateCodeRef.current) {
+        ensureChannel(activeStateCodeRef.current, userId);
+      }
+
+      for (const stateCode of ownersByStateRef.current.keys()) {
+        ensureChannel(stateCode, userId);
+        void applyTrack(stateCode);
+      }
+    }, 5000);
 
     return () => {
-      window.removeEventListener("pagehide", handlePageHide);
+      window.clearInterval(interval);
     };
-  }, [clearPresence]);
+  }, [applyTrack, ensureChannel, isActiveRoute, userId]);
+
+  useEffect(() => {
+    if (isActiveRoute) {
+      return;
+    }
+
+    void clearPresence();
+  }, [clearPresence, isActiveRoute]);
 
   useEffect(() => {
     let active = true;
@@ -453,14 +480,6 @@ export function StatePresenceProvider({ children }: { children: ReactNode }) {
       }
     }
   }, [applyTrack, isActiveRoute, presenceStatus, userId]);
-
-  useEffect(() => {
-    if (isActiveRoute) {
-      return;
-    }
-
-    void clearPresence();
-  }, [clearPresence, isActiveRoute]);
 
   const getOnlineUsers = useCallback(
     (stateCode: string, viewerUserId: string) => {
