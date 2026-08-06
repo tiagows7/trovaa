@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useState } from "react";
 import { usePlatformPresence } from "@/contexts/PlatformPresenceContext";
 import { useStatePresenceContext } from "@/contexts/StatePresenceContext";
 import type { ProfileGender } from "@/types/database";
@@ -29,7 +29,7 @@ export function useStatePresence(
     [stateCode]
   );
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!stateCode || !userId || !gender) return;
 
     updatePresence(ownerKey, stateCode, {
@@ -48,7 +48,27 @@ export function useStatePresence(
     stateCode,
     updatePresence,
     userId,
+  ]);
+
+  useEffect(() => {
+    if (!stateCode || !userId || !gender) return;
+    if (presenceStatus !== "connected") return;
+
+    updatePresence(ownerKey, stateCode, {
+      userId,
+      gender,
+      lookingFor,
+      inConversation: options?.inConversation ?? false,
+    });
+  }, [
+    gender,
+    lookingFor,
+    options?.inConversation,
+    ownerKey,
     presenceStatus,
+    stateCode,
+    updatePresence,
+    userId,
   ]);
 
   useEffect(() => {

@@ -1,41 +1,73 @@
 import type { ProfileGender } from "@/types/database";
 import type { PresenceUser } from "@/hooks/useStatePresence";
 
+function genderPairMatches(
+  sought: ProfileGender,
+  profileGender: ProfileGender
+) {
+  if (sought === "outro" || profileGender === "outro") {
+    return true;
+  }
+
+  return sought === profileGender;
+}
+
+/**
+ * `candidate.lookingFor` e `viewerLookingFor` = perfil que cada um escolheu
+ * na sala (Homem / Mulher), ou null se ainda está na tela inicial.
+ */
 export function isMutualMatch(
   viewerGender: ProfileGender,
   preferredGender: ProfileGender,
-  candidate: PresenceUser
+  candidate: PresenceUser,
+  viewerLookingFor: ProfileGender | null = null
 ): boolean {
   if (candidate.gender !== preferredGender) {
     return false;
   }
 
-  if (!candidate.lookingFor) {
+  const candidateSeeksViewer =
+    candidate.lookingFor === null ||
+    candidate.lookingFor === undefined ||
+    genderPairMatches(candidate.lookingFor, viewerGender);
+
+  if (!candidateSeeksViewer) {
+    return false;
+  }
+
+  if (viewerLookingFor === null || viewerLookingFor === undefined) {
     return true;
   }
 
-  if (candidate.lookingFor === "outro" || viewerGender === "outro") {
-    return true;
-  }
-
-  return candidate.lookingFor === viewerGender;
+  return genderPairMatches(viewerLookingFor, candidate.gender);
 }
 
 export function filterMatchableUsers(
   users: PresenceUser[],
   viewerGender: ProfileGender,
-  preferredGender: ProfileGender
+  preferredGender: ProfileGender,
+  viewerLookingFor: ProfileGender | null = null
 ) {
-  return users.filter((user) => isMutualMatch(viewerGender, preferredGender, user));
+  return users.filter((user) =>
+    isMutualMatch(viewerGender, preferredGender, user, viewerLookingFor)
+  );
 }
 
 export function filterConnectableUsers(
   users: PresenceUser[],
   viewerGender: ProfileGender,
-  preferredGender: ProfileGender
+  preferredGender: ProfileGender,
+  viewerLookingFor: ProfileGender | null = null
 ) {
   return users.filter((user) =>
-    isUserConnectable(getUserAvailability(viewerGender, preferredGender, user))
+    isUserConnectable(
+      getUserAvailability(
+        viewerGender,
+        preferredGender,
+        user,
+        viewerLookingFor
+      )
+    )
   );
 }
 
@@ -66,9 +98,10 @@ export type UserAvailability =
 export function getUserAvailability(
   viewerGender: ProfileGender,
   preferredGender: ProfileGender,
-  user: PresenceUser
+  user: PresenceUser,
+  viewerLookingFor: ProfileGender | null = null
 ): UserAvailability {
-  if (!isMutualMatch(viewerGender, preferredGender, user)) {
+  if (!isMutualMatch(viewerGender, preferredGender, user, viewerLookingFor)) {
     return "waiting_profile";
   }
 
@@ -81,4 +114,20 @@ export function getUserAvailability(
 
 export function isUserConnectable(availability: UserAvailability) {
   return availability === "connectable" || availability === "also_in_conversation";
+}
+
+export function getUnavailableMatchHint(
+  viewerGender: ProfileGender,
+  preferredGender: ProfileGender,
+  user: PresenceUser
+) {
+  if (user.lookingFor && !genderPairMatches(user.lookingFor, viewerGender)) {
+    return "Esta pessoa está buscando outro perfil agora.";
+  }
+
+  if (user.gender !== preferredGender) {
+    return "Perfil diferente do filtro selecionado.";
+  }
+
+  return "Aguardando compatibilidade de filtros.";
 }

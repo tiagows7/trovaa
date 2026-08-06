@@ -6,6 +6,7 @@ import { getDisplayName } from "@/lib/anonymous-names";
 import { getConnectedListTitle } from "@/lib/matching";
 import {
   filterVisibleUsersByGender,
+  getUnavailableMatchHint,
   getUserAvailability,
   isUserConnectable,
 } from "@/lib/presence-matching";
@@ -17,6 +18,7 @@ type ConnectedUsersListProps = {
   users: PresenceUser[];
   viewerGender: ProfileGender;
   preferredGender: ProfileGender;
+  viewerLookingFor?: ProfileGender | null;
   viewerIsVip: boolean;
   pendingPartnerId?: string | null;
   blockOtherConnections?: boolean;
@@ -25,12 +27,15 @@ type ConnectedUsersListProps = {
   onBack: () => void;
 };
 
-function getAvailabilityLabel(availability: ReturnType<typeof getUserAvailability>) {
+function getAvailabilityLabel(
+  availability: ReturnType<typeof getUserAvailability>,
+  hint?: string
+) {
   switch (availability) {
     case "also_in_conversation":
       return "Online · outra conversa ativa";
     case "waiting_profile":
-      return "Aguardando outro perfil";
+      return hint ?? "Aguardando outro perfil";
     default:
       return "Online agora";
   }
@@ -40,6 +45,7 @@ export function ConnectedUsersList({
   users,
   viewerGender,
   preferredGender,
+  viewerLookingFor = null,
   viewerIsVip,
   pendingPartnerId = null,
   blockOtherConnections = false,
@@ -150,6 +156,12 @@ export function ConnectedUsersList({
             const availability = getUserAvailability(
               viewerGender,
               preferredGender,
+              user,
+              viewerLookingFor
+            );
+            const unavailableHint = getUnavailableMatchHint(
+              viewerGender,
+              preferredGender,
               user
             );
             const displayName = getDisplayName(
@@ -160,7 +172,7 @@ export function ConnectedUsersList({
             const isLoading = loadingTargetId === user.userId;
             const isPending = pendingPartnerId === user.userId;
             const isConnectable = isUserConnectable(availability);
-            const statusLabel = getAvailabilityLabel(availability);
+            const statusLabel = getAvailabilityLabel(availability, unavailableHint);
 
             return (
               <button

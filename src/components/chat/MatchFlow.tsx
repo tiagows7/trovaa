@@ -7,7 +7,7 @@ import { ConnectedUsersList } from "@/components/chat/ConnectedUsersList";
 import { useStatePresence } from "@/hooks/useStatePresence";
 import { useUserProfileRoles } from "@/hooks/useUserProfileRoles";
 import { createClient } from "@/lib/supabase/client";
-import { PARTNER_GENDER_OPTIONS } from "@/lib/matching";
+import { getPartnerGenderLabel, PARTNER_GENDER_OPTIONS } from "@/lib/matching";
 import { filterConnectableUsers, countUsersByGender, countUsersInConversationByGender } from "@/lib/presence-matching";
 import { requestConnection } from "@/lib/connection-requests";
 import { useConnectionRequests } from "@/contexts/ConnectionRequestsContext";
@@ -172,7 +172,9 @@ export function MatchFlow({
                 Com quem você quer conversar?
               </h1>
               <p className="mt-3 text-sm text-slate-600 dark:text-slate-300">
-                Escolha o perfil para ver quem está conectado neste estado agora.
+                Seu perfil:{" "}
+                <strong>{getPartnerGenderLabel(userGender)}</strong>. Escolha com
+                quem quer conversar para ver a lista e enviar pedido de conexão.
                 {onlineUsers.length > 0 && (
                   <span className="mt-1 block text-emerald-600 dark:text-emerald-400">
                     {onlineUsers.length} pessoa(s) online nesta sala agora
@@ -194,7 +196,12 @@ export function MatchFlow({
                     option.value
                   );
                   const matchCount = userGender
-                    ? filterConnectableUsers(onlineUsers, userGender, option.value).length
+                    ? filterConnectableUsers(
+                        onlineUsers,
+                        userGender,
+                        option.value,
+                        null
+                      ).length
                     : 0;
 
                   return (
@@ -218,6 +225,13 @@ export function MatchFlow({
                               <span className="text-violet-600 dark:text-violet-300">
                                 {" "}
                                 ({inConversationCount} em conversa)
+                              </span>
+                            )}
+                            {matchCount === 0 && (
+                              <span className="mt-1 block text-amber-600 dark:text-amber-400">
+                                Online, mas com filtro incompatível — peça para
+                                escolherem &quot;{option.label}&quot; ou o perfil
+                                oposto ao de vocês.
                               </span>
                             )}
                           </span>
@@ -251,6 +265,7 @@ export function MatchFlow({
               users={onlineUsers}
               viewerGender={userGender}
               preferredGender={selectedGender}
+              viewerLookingFor={selectedGender}
               viewerIsVip={viewerIsVip}
               pendingPartnerId={outgoingRequest?.targetId ?? null}
               blockOtherConnections={false}
