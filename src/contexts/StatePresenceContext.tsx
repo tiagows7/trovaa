@@ -142,7 +142,8 @@ export function StatePresenceProvider({ children }: { children: ReactNode }) {
   const userIdRef = useRef("");
   const trackGenerationRef = useRef(0);
   const activeStateCodeRef = useRef<string | null>(null);
-  const releaseTimersRef = useRef(new Map<string, ReturnType<typeof setTimeout>>());
+  const isActiveRouteRef = useRef(false);
+  const untrackTimersRef = useRef(new Map<string, ReturnType<typeof setTimeout>>());
   const [userId, setUserId] = useState("");
 
   userIdRef.current = userId;
@@ -151,6 +152,8 @@ export function StatePresenceProvider({ children }: { children: ReactNode }) {
     pathname.startsWith("/salas") ||
     pathname.startsWith("/chat") ||
     pathname.startsWith("/conversa");
+
+  isActiveRouteRef.current = isActiveRoute;
 
   const activeStateCode = getActiveStateFromPath(pathname);
   activeStateCodeRef.current = activeStateCode;
@@ -175,68 +178,21 @@ export function StatePresenceProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
-  const getRequiredStates = useCallback(() => {
-    const keepStates = new Set<string>(ownersByStateRef.current.keys());
-
-    if (activeStateCodeRef.current) {
-      keepStates.add(activeStateCodeRef.current);
+  const cancelScheduledUntrack = useCallback((stateCode: string) => {
+    const timer = untrackTimersRef.current.get(stateCode);
+    if (timer) {
+      clearTimeout(timer);
+      untrackTimersRef.current.delete(stateCode);
     }
-
-    return keepStates;
   }, []);
-
-  const releaseUnusedChannels = useCallback(() => {
-    const keepStates = getRequiredStates();
-
-    for (const stateCode of keepStates) {
-      const pendingRelease = releaseTimersRef.current.get(stateCode);
-      if (pendingRelease) {
-        clearTimeout(pendingRelease);
-        releaseTimersRef.current.delete(stateCode);
-      }
-    }
-
-    for (const [stateCode, channel] of [...channelsRef.current.entries()]) {
-      if (keepStates.has(stateCode)) {
-        continue;
-      }
-
-      if (releaseTimersRef.current.has(stateCode)) {
-        continue;
-      }
-
-      const timer = setTimeout(() => {
-        releaseTimersRef.current.delete(stateCode);
-
-        if (getRequiredStates().has(stateCode)) {
-          return;
-        }
-
-        subscribedStatesRef.current.delete(stateCode);
-        channelsRef.current.delete(stateCode);
-        setReadyStates((current) => {
-          if (!current.has(stateCode)) {
-            return current;
-          }
-
-          const next = new Set(current);
-          next.delete(stateCode);
-          return next;
-        });
-        void supabase.removeChannel(channel);
-      }, 3000);
-
-      releaseTimersRef.current.set(stateCode, timer);
-    }
-  }, [getRequiredStates, supabase]);
 
   const clearPresence = useCallback(async () => {
     trackGenerationRef.current += 1;
 
-    for (const timer of releaseTimersRef.current.values()) {
+    for (const timer of untrackTimersRef.current.values()) {
       clearTimeout(timer);
     }
-    releaseTimersRef.current.clear();
+    untrackTimersRef.current.clear();
 
     const channels = new Map(channelsRef.current);
     const ownedStates = [...ownersByStateRef.current.keys()];
@@ -281,18 +237,42 @@ export function StatePresenceProvider({ children }: { children: ReactNode }) {
         return;
       }
 
+      if (!merged) {
+        cancelScheduledUntrack(normalizedState);
+        untrackTimersRef.current.set(
+          normalizedState,
+          setTimeout(() => {
+            untrackTimersRef.current.delete(normalizedState);
+            if (ownersByStateRef.current.get(normalizedState)?.size) {
+              return;
+            }
+
+            const pendingChannel = channelsRef.current.get(normalizedState);
+            if (!pendingChannel) return;
+
+            void pendingChannel
+              .untrack()
+              .then(() => {
+                if (generation === trackGenerationRef.current) {
+                  notifySync();
+                }
+              })
+              .catch(() => undefined);
+          }, 500)
+        );
+        return;
+      }
+
+      cancelScheduledUntrack(normalizedState);
+
       try {
-        if (!merged) {
-          await channel.untrack();
-        } else {
-          await channel.track({
-            user_id: merged.userId,
-            gender: merged.gender,
-            looking_for: merged.lookingFor,
-            state_code: normalizedState,
-            in_conversation: merged.inConversation ?? false,
-          });
-        }
+        await channel.track({
+          user_id: merged.userId,
+          gender: merged.gender,
+          looking_for: merged.lookingFor,
+          state_code: normalizedState,
+          in_conversation: merged.inConversation ?? false,
+        });
       } catch {
         return;
       }
@@ -303,7 +283,7 @@ export function StatePresenceProvider({ children }: { children: ReactNode }) {
 
       notifySync();
     },
-    [notifySync]
+    [cancelScheduledUntrack, notifySync]
   );
 
   const applyAllOwnedTracks = useCallback(() => {
@@ -406,9 +386,8 @@ export function StatePresenceProvider({ children }: { children: ReactNode }) {
       }
 
       void applyTrack(normalizedState);
-      releaseUnusedChannels();
     },
-    [applyTrack, ensureChannel, isActiveRoute, releaseUnusedChannels]
+    [applyTrack, ensureChannel, isActiveRoute]
   );
 
   useEffect(() => {
@@ -461,15 +440,7 @@ export function StatePresenceProvider({ children }: { children: ReactNode }) {
     for (const stateCode of ownersByStateRef.current.keys()) {
       ensureChannel(stateCode, userId);
     }
-
-    releaseUnusedChannels();
-  }, [
-    activeStateCode,
-    ensureChannel,
-    isActiveRoute,
-    releaseUnusedChannels,
-    userId,
-  ]);
+  }, [activeStateCode, ensureChannel, isActiveRoute, userId]);
 
   useEffect(() => {
     if (!isActiveRoute || !userId) {
@@ -484,9 +455,11 @@ export function StatePresenceProvider({ children }: { children: ReactNode }) {
   }, [applyTrack, isActiveRoute, presenceStatus, userId]);
 
   useEffect(() => {
-    if (!isActiveRoute) {
-      void clearPresence();
+    if (isActiveRoute) {
+      return;
     }
+
+    void clearPresence();
   }, [clearPresence, isActiveRoute]);
 
   const getOnlineUsers = useCallback(

@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { ConversationRoutePresence } from "@/components/chat/ConversationRoutePresence";
 import { ConversationTabSync } from "@/components/chat/ConversationTabSync";
+import type { ProfileGender } from "@/types/database";
 
 export const dynamic = "force-dynamic";
 
@@ -20,11 +21,14 @@ export default async function ConversationPage({ params }: ConversationPageProps
     redirect("/login");
   }
 
-  const { data: conversation } = await supabase
-    .from("conversations")
-    .select("id, user_a_id, user_b_id, state_code, ended_at")
-    .eq("id", id)
-    .maybeSingle();
+  const [{ data: profile }, { data: conversation }] = await Promise.all([
+    supabase.from("profiles").select("gender").eq("id", user.id).maybeSingle(),
+    supabase
+      .from("conversations")
+      .select("id, user_a_id, user_b_id, state_code, ended_at")
+      .eq("id", id)
+      .maybeSingle(),
+  ]);
 
   if (
     !conversation ||
@@ -34,11 +38,17 @@ export default async function ConversationPage({ params }: ConversationPageProps
     redirect("/salas");
   }
 
+  if (!profile?.gender) {
+    redirect("/salas");
+  }
+
   return (
     <>
       <ConversationRoutePresence
         conversationId={id}
         stateCode={conversation.state_code}
+        userId={user.id}
+        gender={profile.gender as ProfileGender}
       />
       <ConversationTabSync conversationId={id} />
     </>

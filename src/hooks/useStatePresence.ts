@@ -71,7 +71,13 @@ export function useStatePresence(
     };
 
     refresh();
-    return subscribePresenceSync(refresh);
+    const unsubscribe = subscribePresenceSync(refresh);
+    const interval = window.setInterval(refresh, 2000);
+
+    return () => {
+      unsubscribe();
+      window.clearInterval(interval);
+    };
   }, [getOnlineUsers, isStateLobbyReady, presenceStatus, stateCode, subscribePresenceSync, userId]);
 
   const effectiveStatus =

@@ -107,16 +107,16 @@ export function ConnectedUsersList({
       <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">
         {viewerIsVip
           ? "Como VIP, você vê os nomes reais e pode abrir cada conversa em uma aba no topo da página."
-          : "Nomes fictícios por privacidade. Sem VIP você conversa com uma pessoa por vez."}
+          : "Nomes fictícios por privacidade. Você pode conversar com várias pessoas — VIP mostra os nomes reais."}
       </p>
 
       {!viewerIsVip && (
         <p className="mt-3 rounded-xl border border-violet-200 bg-violet-50 px-4 py-3 text-sm text-violet-800 dark:border-violet-900/50 dark:bg-violet-950/30 dark:text-violet-200">
-          Limite gratuito: <strong>1 conversa ativa</strong>.{" "}
+          Quem já está em outra conversa aparece como disponível para um novo chat.{" "}
           <a href="/vip" className="font-semibold underline">
             Seja VIP por {VIP_PRICE_LABEL}/mês
           </a>{" "}
-          para várias conversas em abas no app ao mesmo tempo.
+          para ver nomes reais e abrir várias abas no app.
         </p>
       )}
 

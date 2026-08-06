@@ -38,7 +38,10 @@ function mergeLobbyState(
   pathnameState: string | null
 ) {
   const conversaState = [...owners.entries()].find(([key, state]) =>
-    (key.startsWith("conversa:") || key.startsWith("route:")) && state
+    (key.startsWith("conversa:") ||
+      key.startsWith("route:") ||
+      key.startsWith("layout:")) &&
+    state
   )?.[1];
 
   if (conversaState) {

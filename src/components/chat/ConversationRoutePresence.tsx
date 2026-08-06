@@ -9,61 +9,52 @@ import type { ProfileGender } from "@/types/database";
 type ConversationRoutePresenceProps = {
   conversationId: string;
   stateCode: string;
+  userId: string;
+  gender: ProfileGender;
 };
 
 export function ConversationRoutePresence({
   conversationId,
   stateCode,
+  userId,
+  gender,
 }: ConversationRoutePresenceProps) {
   const { updatePresence } = useStatePresenceContext();
   const { reportLobbyState } = usePlatformPresence();
   const supabase = useMemo(() => createClient(), []);
   const trackedRef = useRef(false);
+  const normalizedState = stateCode.toUpperCase();
+  const ownerKey = `route:${conversationId}`;
 
   useEffect(() => {
-    let active = true;
-    const ownerKey = `route:${conversationId}`;
-    const normalizedState = stateCode.toUpperCase();
+    trackedRef.current = true;
 
     reportLobbyState(ownerKey, normalizedState);
+    updatePresence(ownerKey, normalizedState, {
+      userId,
+      gender,
+      lookingFor: null,
+      inConversation: true,
+      openToMatch: true,
+    });
 
-    async function track() {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
+    let active = true;
 
-      if (!user || !active) return;
+    async function validatePresence() {
+      const { data: conversation } = await supabase
+        .from("conversations")
+        .select("ended_at")
+        .eq("id", conversationId)
+        .maybeSingle();
 
-      const [{ data: conversation }, { data: profile }] = await Promise.all([
-        supabase
-          .from("conversations")
-          .select("ended_at")
-          .eq("id", conversationId)
-          .maybeSingle(),
-        supabase
-          .from("profiles")
-          .select("gender")
-          .eq("id", user.id)
-          .maybeSingle(),
-      ]);
-
-      if (!active || !conversation || conversation.ended_at || !profile?.gender) {
-        return;
+      if (!active || !conversation || conversation.ended_at) {
+        reportLobbyState(ownerKey, null);
+        updatePresence(ownerKey, normalizedState, null);
+        trackedRef.current = false;
       }
-
-      trackedRef.current = true;
-
-      updatePresence(ownerKey, normalizedState, {
-        userId: user.id,
-        gender: profile.gender as ProfileGender,
-        lookingFor: null,
-        inConversation: true,
-        openToMatch: true,
-      });
-      reportLobbyState(ownerKey, normalizedState);
     }
 
-    void track();
+    void validatePresence();
 
     return () => {
       active = false;
@@ -75,10 +66,13 @@ export function ConversationRoutePresence({
     };
   }, [
     conversationId,
+    gender,
+    normalizedState,
+    ownerKey,
     reportLobbyState,
-    stateCode,
     supabase,
     updatePresence,
+    userId,
   ]);
 
   return null;

@@ -102,49 +102,66 @@ export async function fetchConnectionRequestById(
 }
 
 export async function requestConnection(
-  supabase: SupabaseClient,
+  _supabase: SupabaseClient,
   targetId: string,
   stateCode: string
 ): Promise<RequestConnectionResult> {
-  const { data, error } = await supabase.rpc("request_connection", {
-    p_target_id: targetId,
-    p_state_code: stateCode,
+  const response = await fetch("/api/connections/request", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ targetId, stateCode }),
   });
 
-  if (error) {
-    throw new Error(formatConnectionRequestError(error.message));
-  }
-
-  const payload = data as {
-    status: "existing" | "pending";
-    conversation_id?: string;
-    request_id?: string;
+  const payload = (await response.json()) as {
+    status?: "existing" | "pending";
+    conversationId?: string;
+    requestId?: string;
+    error?: string;
   };
 
-  if (payload.status === "existing" && payload.conversation_id) {
-    return { status: "existing", conversationId: payload.conversation_id };
+  if (!response.ok) {
+    throw new Error(
+      formatConnectionRequestError(payload.error ?? "Não foi possível enviar o pedido de conexão.")
+    );
   }
 
-  if (payload.status === "pending" && payload.request_id) {
-    return { status: "pending", requestId: payload.request_id };
+  if (payload.status === "existing" && payload.conversationId) {
+    return { status: "existing", conversationId: payload.conversationId };
+  }
+
+  if (payload.status === "pending" && payload.requestId) {
+    return { status: "pending", requestId: payload.requestId };
   }
 
   throw new Error("Resposta inválida ao pedir conexão.");
 }
 
 export async function acceptConnection(
-  supabase: SupabaseClient,
+  _supabase: SupabaseClient,
   requestId: string
 ): Promise<string> {
-  const { data, error } = await supabase.rpc("accept_connection", {
-    p_request_id: requestId,
+  const response = await fetch("/api/connections/accept", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ requestId }),
   });
 
-  if (error) {
-    throw new Error(formatConnectionRequestError(error.message));
+  const payload = (await response.json()) as {
+    conversationId?: string;
+    error?: string;
+  };
+
+  if (!response.ok) {
+    throw new Error(
+      formatConnectionRequestError(payload.error ?? "Não foi possível aceitar o pedido de conexão.")
+    );
   }
 
-  return data as string;
+  if (!payload.conversationId) {
+    throw new Error("Resposta inválida ao aceitar conexão.");
+  }
+
+  return payload.conversationId;
 }
 
 export async function declineConnection(
