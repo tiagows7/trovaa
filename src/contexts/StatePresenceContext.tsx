@@ -230,7 +230,7 @@ export function StatePresenceProvider({ children }: { children: ReactNode }) {
   }, [notifySync, supabase]);
 
   const applyTrack = useCallback(
-    async (stateCode: string) => {
+    async (stateCode: string, attempt = 0) => {
       const generation = trackGenerationRef.current;
       const normalizedState = stateCode.toUpperCase();
       const channel = channelsRef.current.get(normalizedState);
@@ -238,6 +238,11 @@ export function StatePresenceProvider({ children }: { children: ReactNode }) {
       const merged = owners ? mergeTrackPayload(owners) : null;
 
       if (!channel || !subscribedStatesRef.current.has(normalizedState)) {
+        if (attempt < 12 && merged) {
+          window.setTimeout(() => {
+            void applyTrack(normalizedState, attempt + 1);
+          }, 250 * (attempt + 1));
+        }
         return;
       }
 
@@ -278,6 +283,11 @@ export function StatePresenceProvider({ children }: { children: ReactNode }) {
           in_conversation: merged.inConversation ?? false,
         });
       } catch {
+        if (attempt < 8) {
+          window.setTimeout(() => {
+            void applyTrack(normalizedState, attempt + 1);
+          }, 400 * (attempt + 1));
+        }
         return;
       }
 
@@ -295,6 +305,19 @@ export function StatePresenceProvider({ children }: { children: ReactNode }) {
       void applyTrack(stateCode);
     }
   }, [applyTrack]);
+
+  const scheduleTrackRetries = useCallback(
+    (stateCode: string) => {
+      for (const delay of [0, 250, 750, 1500, 3000, 5000]) {
+        window.setTimeout(() => {
+          void applyTrack(stateCode);
+          applyAllOwnedTracks();
+          notifySync();
+        }, delay);
+      }
+    },
+    [applyAllOwnedTracks, applyTrack, notifySync]
+  );
 
   const ensureChannel = useCallback(
     (stateCode: string, presenceKey: string) => {
@@ -340,16 +363,16 @@ export function StatePresenceProvider({ children }: { children: ReactNode }) {
 
           channel.subscribe((status: string) => {
             if (status === "SUBSCRIBED") {
+              pendingChannelsRef.current.delete(normalizedState);
               subscribedStatesRef.current.add(normalizedState);
               markStateReady(normalizedState);
               setPresenceStatus("connected");
-              void applyTrack(normalizedState);
-              applyAllOwnedTracks();
-              notifySync();
+              scheduleTrackRetries(normalizedState);
               return;
             }
 
             if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+              pendingChannelsRef.current.delete(normalizedState);
               subscribedStatesRef.current.delete(normalizedState);
               channelsRef.current.delete(normalizedState);
               void supabase.removeChannel(channel);
@@ -369,7 +392,6 @@ export function StatePresenceProvider({ children }: { children: ReactNode }) {
                   (ownersByStateRef.current.has(normalizedState) ||
                     activeStateCodeRef.current === normalizedState)
                 ) {
-                  pendingChannelsRef.current.delete(normalizedState);
                   ensureChannel(normalizedState, userIdRef.current || presenceKey);
                 }
               }, 2000);
@@ -377,15 +399,47 @@ export function StatePresenceProvider({ children }: { children: ReactNode }) {
           });
 
           channelsRef.current.set(normalizedState, channel);
-        } finally {
+        } catch {
           pendingChannelsRef.current.delete(normalizedState);
         }
       })();
 
       return null;
     },
-    [applyAllOwnedTracks, applyTrack, markStateReady, notifySync, supabase]
+    [applyAllOwnedTracks, applyTrack, markStateReady, notifySync, scheduleTrackRetries, supabase]
   );
+
+  const bootstrapPresence = useCallback(() => {
+    if (!isActiveRouteRef.current) {
+      return;
+    }
+
+    let presenceKey = userIdRef.current;
+    if (!presenceKey) {
+      for (const owners of ownersByStateRef.current.values()) {
+        for (const payload of owners.values()) {
+          if (payload.userId) {
+            presenceKey = payload.userId;
+            break;
+          }
+        }
+        if (presenceKey) break;
+      }
+    }
+
+    if (!presenceKey) {
+      return;
+    }
+
+    if (activeStateCodeRef.current) {
+      ensureChannel(activeStateCodeRef.current, presenceKey);
+    }
+
+    for (const stateCode of ownersByStateRef.current.keys()) {
+      ensureChannel(stateCode, presenceKey);
+      void applyTrack(stateCode);
+    }
+  }, [applyTrack, ensureChannel]);
 
   const isStateLobbyReady = useCallback(
     (stateCode: string) => readyStates.has(stateCode.toUpperCase()),
@@ -424,25 +478,56 @@ export function StatePresenceProvider({ children }: { children: ReactNode }) {
   );
 
   useEffect(() => {
+    if (!isActiveRoute) {
+      return;
+    }
+
+    bootstrapPresence();
+
+    let ticks = 0;
+    const interval = window.setInterval(() => {
+      ticks += 1;
+      bootstrapPresence();
+      if (ticks >= 30) {
+        window.clearInterval(interval);
+      }
+    }, 1000);
+
+    return () => {
+      window.clearInterval(interval);
+    };
+  }, [authReady, activeStateCode, bootstrapPresence, isActiveRoute, userId]);
+
+  useEffect(() => {
+    if (!isActiveRoute) {
+      return;
+    }
+
+    function handleVisibilityChange() {
+      if (document.visibilityState === "visible") {
+        bootstrapPresence();
+      }
+    }
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [bootstrapPresence, isActiveRoute]);
+
+  useEffect(() => {
     if (!isActiveRoute || !userId) {
       return;
     }
 
     const interval = window.setInterval(() => {
-      if (activeStateCodeRef.current) {
-        ensureChannel(activeStateCodeRef.current, userId);
-      }
-
-      for (const stateCode of ownersByStateRef.current.keys()) {
-        ensureChannel(stateCode, userId);
-        void applyTrack(stateCode);
-      }
+      bootstrapPresence();
     }, 5000);
 
     return () => {
       window.clearInterval(interval);
     };
-  }, [applyTrack, ensureChannel, isActiveRoute, userId]);
+  }, [bootstrapPresence, isActiveRoute, userId]);
 
   useEffect(() => {
     if (isActiveRoute) {
@@ -479,30 +564,14 @@ export function StatePresenceProvider({ children }: { children: ReactNode }) {
   }, [clearPresence, supabase]);
 
   useEffect(() => {
-    if (!authReady || !isActiveRoute || !userId) {
+    if (!authReady || !isActiveRoute) {
       return;
     }
 
     void prepareSupabaseRealtimeAuth(supabase).then(() => {
-      if (activeStateCode) {
-        ensureChannel(activeStateCode, userId);
-      }
-
-      for (const stateCode of ownersByStateRef.current.keys()) {
-        ensureChannel(stateCode, userId);
-      }
-
-      applyAllOwnedTracks();
+      bootstrapPresence();
     });
-  }, [
-    activeStateCode,
-    applyAllOwnedTracks,
-    authReady,
-    ensureChannel,
-    isActiveRoute,
-    supabase,
-    userId,
-  ]);
+  }, [authReady, bootstrapPresence, isActiveRoute, supabase]);
 
   useEffect(() => {
     if (!isActiveRoute || !userId) {
@@ -521,8 +590,9 @@ export function StatePresenceProvider({ children }: { children: ReactNode }) {
       void syncVersion;
       const normalizedState = stateCode.toUpperCase();
 
-      if (userIdRef.current && isActiveRouteRef.current) {
-        ensureChannel(normalizedState, userIdRef.current);
+      const presenceKey = userIdRef.current || viewerUserId;
+      if (presenceKey && isActiveRouteRef.current) {
+        ensureChannel(normalizedState, presenceKey);
       }
 
       const channel = channelsRef.current.get(normalizedState);
