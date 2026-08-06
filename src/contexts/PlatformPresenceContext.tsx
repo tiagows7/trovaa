@@ -12,6 +12,7 @@ import {
 } from "react";
 import { usePathname } from "next/navigation";
 import type { RealtimeChannel } from "@supabase/supabase-js";
+import type { AuthChangeEvent, Session } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/client";
 import { useSupabaseRealtimeAuth } from "@/hooks/useSupabaseRealtimeAuth";
 
@@ -63,7 +64,7 @@ function mergeLobbyState(
 export function PlatformPresenceProvider({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const supabase = useMemo(() => createClient(), []);
-  useSupabaseRealtimeAuth(supabase);
+  const authReady = useSupabaseRealtimeAuth(supabase);
   const [userId, setUserId] = useState("");
   const [onlineUsers, setOnlineUsers] = useState<Map<string, string | null>>(
     new Map()
@@ -145,7 +146,7 @@ export function PlatformPresenceProvider({ children }: { children: ReactNode }) 
   useEffect(() => {
     let active = true;
 
-    void supabase.auth.getUser().then(({ data }) => {
+    void supabase.auth.getUser().then(({ data }: { data: { user: { id: string } | null } }) => {
       if (active) {
         setUserId(data.user?.id ?? "");
       }
@@ -153,7 +154,7 @@ export function PlatformPresenceProvider({ children }: { children: ReactNode }) 
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((event, session) => {
+    } = supabase.auth.onAuthStateChange((event: AuthChangeEvent, session: Session | null) => {
       setUserId(session?.user?.id ?? "");
       if (event === "SIGNED_OUT" || !session?.user) {
         lobbyStateOwnersRef.current.clear();
@@ -168,7 +169,7 @@ export function PlatformPresenceProvider({ children }: { children: ReactNode }) 
   }, [supabase]);
 
   useEffect(() => {
-    if (!userId || !isActiveRoute) {
+    if (!authReady || !userId || !isActiveRoute) {
       subscribedRef.current = false;
       if (channelRef.current) {
         void channelRef.current.untrack().catch(() => undefined);
@@ -195,7 +196,7 @@ export function PlatformPresenceProvider({ children }: { children: ReactNode }) 
       syncOnlineUsers(channel);
     });
 
-    channel.subscribe((status) => {
+    channel.subscribe((status: string) => {
       if (!active) return;
 
       if (status === "SUBSCRIBED") {
@@ -218,7 +219,7 @@ export function PlatformPresenceProvider({ children }: { children: ReactNode }) 
       }
       setOnlineUsers(new Map());
     };
-  }, [applyPlatformTrack, isActiveRoute, supabase, syncOnlineUsers, userId]);
+  }, [applyPlatformTrack, authReady, isActiveRoute, supabase, syncOnlineUsers, userId]);
 
   useEffect(() => {
     void lobbyStateVersion;

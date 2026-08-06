@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { Logo } from "@/components/Logo";
 import { ChatSidebar } from "@/components/chat/ChatSidebar";
+import type { RealtimePostgresInsertPayload } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/client";
 import { SignOutButton } from "@/components/SignOutButton";
 import { VipBadge } from "@/components/VipBadge";
@@ -65,7 +66,7 @@ export function ChatRoom({
           table: "messages",
           filter: `state_code=eq.${stateCode}`,
         },
-        async (payload) => {
+        async (payload: RealtimePostgresInsertPayload<Message>) => {
           const newMessage = payload.new as Message;
 
           const { data: profile } = await supabase

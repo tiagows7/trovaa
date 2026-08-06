@@ -5,6 +5,7 @@ import Link from "next/link";
 import { AdminNavLink } from "@/components/admin/AdminNavLink";
 import { Logo } from "@/components/Logo";
 import { ChatSidebar } from "@/components/chat/ChatSidebar";
+import type { RealtimePostgresInsertPayload } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/client";
 import { SignOutButton } from "@/components/SignOutButton";
 import { VipBadge } from "@/components/VipBadge";
@@ -87,7 +88,7 @@ export function PrivateChatRoom({
           table: "conversation_messages",
           filter: `conversation_id=eq.${conversationId}`,
         },
-        (payload) => {
+        (payload: RealtimePostgresInsertPayload<ConversationMessage>) => {
           const newMessage = payload.new as ConversationMessage;
           setMessages((current) => {
             if (current.some((message) => message.id === newMessage.id)) return current;

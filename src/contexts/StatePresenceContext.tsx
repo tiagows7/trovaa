@@ -12,6 +12,7 @@ import {
 } from "react";
 import { usePathname } from "next/navigation";
 import type { RealtimeChannel } from "@supabase/supabase-js";
+import type { AuthChangeEvent, Session } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/client";
 import { useSupabaseRealtimeAuth } from "@/hooks/useSupabaseRealtimeAuth";
 import type { ProfileGender } from "@/types/database";
@@ -130,7 +131,9 @@ function getActiveStateFromPath(pathname: string) {
 export function StatePresenceProvider({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const supabase = useMemo(() => createClient(), []);
-  useSupabaseRealtimeAuth(supabase);
+  const authReady = useSupabaseRealtimeAuth(supabase);
+  const authReadyRef = useRef(false);
+  authReadyRef.current = authReady;
   const [presenceStatus, setPresenceStatus] = useState<
     "idle" | "connecting" | "connected" | "error"
   >("idle");
@@ -296,6 +299,10 @@ export function StatePresenceProvider({ children }: { children: ReactNode }) {
 
   const ensureChannel = useCallback(
     (stateCode: string, presenceKey: string) => {
+      if (!authReadyRef.current || !presenceKey) {
+        return null;
+      }
+
       const normalizedState = stateCode.toUpperCase();
       const existing = channelsRef.current.get(normalizedState);
 
@@ -317,7 +324,7 @@ export function StatePresenceProvider({ children }: { children: ReactNode }) {
         notifySync();
       });
 
-      channel.subscribe((status) => {
+      channel.subscribe((status: string) => {
         if (status === "SUBSCRIBED") {
           subscribedStatesRef.current.add(normalizedState);
           markStateReady(normalizedState);
@@ -344,6 +351,7 @@ export function StatePresenceProvider({ children }: { children: ReactNode }) {
 
           window.setTimeout(() => {
             if (
+              authReadyRef.current &&
               isActiveRouteRef.current &&
               (ownersByStateRef.current.has(normalizedState) ||
                 activeStateCodeRef.current === normalizedState)
@@ -399,7 +407,7 @@ export function StatePresenceProvider({ children }: { children: ReactNode }) {
   );
 
   useEffect(() => {
-    if (!isActiveRoute || !userId) {
+    if (!authReady || !isActiveRoute || !userId) {
       return;
     }
 
@@ -417,7 +425,7 @@ export function StatePresenceProvider({ children }: { children: ReactNode }) {
     return () => {
       window.clearInterval(interval);
     };
-  }, [applyTrack, ensureChannel, isActiveRoute, userId]);
+  }, [applyTrack, authReady, ensureChannel, isActiveRoute, userId]);
 
   useEffect(() => {
     if (isActiveRoute) {
@@ -430,7 +438,7 @@ export function StatePresenceProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let active = true;
 
-    void supabase.auth.getUser().then(({ data }) => {
+    void supabase.auth.getUser().then(({ data }: { data: { user: { id: string } | null } }) => {
       if (active) {
         setUserId(data.user?.id ?? "");
       }
@@ -438,7 +446,7 @@ export function StatePresenceProvider({ children }: { children: ReactNode }) {
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((event, session) => {
+    } = supabase.auth.onAuthStateChange((event: AuthChangeEvent, session: Session | null) => {
       const nextUserId = session?.user?.id ?? "";
       setUserId(nextUserId);
 
@@ -454,7 +462,7 @@ export function StatePresenceProvider({ children }: { children: ReactNode }) {
   }, [clearPresence, supabase]);
 
   useEffect(() => {
-    if (!isActiveRoute || !userId) {
+    if (!authReady || !isActiveRoute || !userId) {
       return;
     }
 
@@ -465,7 +473,16 @@ export function StatePresenceProvider({ children }: { children: ReactNode }) {
     for (const stateCode of ownersByStateRef.current.keys()) {
       ensureChannel(stateCode, userId);
     }
-  }, [activeStateCode, ensureChannel, isActiveRoute, userId]);
+
+    applyAllOwnedTracks();
+  }, [
+    activeStateCode,
+    applyAllOwnedTracks,
+    authReady,
+    ensureChannel,
+    isActiveRoute,
+    userId,
+  ]);
 
   useEffect(() => {
     if (!isActiveRoute || !userId) {

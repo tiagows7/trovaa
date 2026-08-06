@@ -13,6 +13,7 @@ import {
 import { usePathname } from "next/navigation";
 import { useConversationTabs } from "@/contexts/ConversationTabsContext";
 import { playNotificationBeep } from "@/lib/notification-sound";
+import type { RealtimePostgresInsertPayload } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/client";
 import type { ConversationMessage } from "@/types/database";
 
@@ -95,7 +96,7 @@ export function ConversationUnreadProvider({ children }: { children: ReactNode }
           table: "conversation_messages",
           filter: `conversation_id=eq.${tab.conversationId}`,
         },
-        (payload) => {
+        (payload: RealtimePostgresInsertPayload<ConversationMessage>) => {
           const message = payload.new as ConversationMessage;
           if (!message?.id || message.user_id === userIdRef.current) return;
 

@@ -10,6 +10,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import type { RealtimePostgresChangesPayload } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/client";
 import { getDisplayName } from "@/lib/anonymous-names";
 import { getStateByCode } from "@/lib/brazil-states";
@@ -198,7 +199,7 @@ export function ConnectionRequestsProvider({ children }: { children: ReactNode }
         table: "connection_requests",
         filter: `requester_id=eq.${userId}`,
       },
-      (payload) => {
+      (payload: RealtimePostgresChangesPayload<Record<string, unknown>>) => {
         const row = (payload.new ?? payload.old) as Record<string, unknown> | null;
         if (!row?.id) return;
 
@@ -235,7 +236,7 @@ export function ConnectionRequestsProvider({ children }: { children: ReactNode }
         table: "connection_requests",
         filter: `target_id=eq.${userId}`,
       },
-      (payload) => {
+      (payload: RealtimePostgresChangesPayload<Record<string, unknown>>) => {
         const row = (payload.new ?? payload.old) as Record<string, unknown> | null;
         if (!row?.id) return;
 

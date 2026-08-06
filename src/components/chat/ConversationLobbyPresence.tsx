@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useConversationTabs } from "@/contexts/ConversationTabsContext";
 import { useStatePresenceContext } from "@/contexts/StatePresenceContext";
 import { usePlatformPresence } from "@/contexts/PlatformPresenceContext";
+import type { Session } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/client";
 import type { ProfileGender } from "@/types/database";
 
@@ -52,10 +53,12 @@ export function ConversationLobbyPresence() {
       setUserId(user.id);
       setGender((profile?.gender as ProfileGender | null) ?? null);
       setActiveConversations(
-        (conversations ?? []).map((conversation) => ({
-          conversationId: conversation.id,
-          stateCode: conversation.state_code.toUpperCase(),
-        }))
+        (conversations ?? []).map(
+          (conversation: { id: string; state_code: string }) => ({
+            conversationId: conversation.id,
+            stateCode: conversation.state_code.toUpperCase(),
+          })
+        )
       );
     }
 
@@ -63,7 +66,8 @@ export function ConversationLobbyPresence() {
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
+    } = supabase.auth.onAuthStateChange(
+      (_event: string, session: Session | null) => {
       if (!session?.user) {
         setUserId("");
         setGender(null);
