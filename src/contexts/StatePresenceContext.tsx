@@ -13,7 +13,7 @@ import {
 import { usePathname } from "next/navigation";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import type { AuthChangeEvent, Session } from "@supabase/supabase-js";
-import { createClient } from "@/lib/supabase/client";
+import { createClient, prepareSupabaseRealtimeAuth } from "@/lib/supabase/client";
 import { useSupabaseRealtimeAuth } from "@/hooks/useSupabaseRealtimeAuth";
 import type { ProfileGender } from "@/types/database";
 import type { PresenceUser } from "@/hooks/useStatePresence";
@@ -132,8 +132,6 @@ export function StatePresenceProvider({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const supabase = useMemo(() => createClient(), []);
   const authReady = useSupabaseRealtimeAuth(supabase);
-  const authReadyRef = useRef(false);
-  authReadyRef.current = authReady;
   const [presenceStatus, setPresenceStatus] = useState<
     "idle" | "connecting" | "connected" | "error"
   >("idle");
@@ -149,6 +147,7 @@ export function StatePresenceProvider({ children }: { children: ReactNode }) {
   const activeStateCodeRef = useRef<string | null>(null);
   const isActiveRouteRef = useRef(false);
   const untrackTimersRef = useRef(new Map<string, ReturnType<typeof setTimeout>>());
+  const pendingChannelsRef = useRef(new Set<string>());
   const [userId, setUserId] = useState("");
 
   userIdRef.current = userId;
@@ -299,7 +298,7 @@ export function StatePresenceProvider({ children }: { children: ReactNode }) {
 
   const ensureChannel = useCallback(
     (stateCode: string, presenceKey: string) => {
-      if (!authReadyRef.current || !presenceKey) {
+      if (!presenceKey) {
         return null;
       }
 
@@ -310,62 +309,80 @@ export function StatePresenceProvider({ children }: { children: ReactNode }) {
         return existing;
       }
 
-      const channel = supabase.channel(`state:${normalizedState}`, {
-        config: { presence: { key: presenceKey } },
-      });
+      if (pendingChannelsRef.current.has(normalizedState)) {
+        return null;
+      }
 
-      channel.on("presence", { event: "sync" }, () => {
-        notifySync();
-      });
-      channel.on("presence", { event: "join" }, () => {
-        notifySync();
-      });
-      channel.on("presence", { event: "leave" }, () => {
-        notifySync();
-      });
+      pendingChannelsRef.current.add(normalizedState);
+      setPresenceStatus("connecting");
 
-      channel.subscribe((status: string) => {
-        if (status === "SUBSCRIBED") {
-          subscribedStatesRef.current.add(normalizedState);
-          markStateReady(normalizedState);
-          setPresenceStatus("connected");
-          void applyTrack(normalizedState);
-          applyAllOwnedTracks();
-          notifySync();
-          return;
-        }
+      void (async () => {
+        try {
+          await prepareSupabaseRealtimeAuth(supabase);
 
-        if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
-          subscribedStatesRef.current.delete(normalizedState);
-          channelsRef.current.delete(normalizedState);
-          void supabase.removeChannel(channel);
-          setReadyStates((current) => {
-            if (!current.has(normalizedState)) {
-              return current;
-            }
+          if (channelsRef.current.has(normalizedState)) {
+            return;
+          }
 
-            const next = new Set(current);
-            next.delete(normalizedState);
-            return next;
+          const channel = supabase.channel(`state:${normalizedState}`, {
+            config: { presence: { key: presenceKey } },
           });
 
-          window.setTimeout(() => {
-            if (
-              authReadyRef.current &&
-              isActiveRouteRef.current &&
-              (ownersByStateRef.current.has(normalizedState) ||
-                activeStateCodeRef.current === normalizedState)
-            ) {
-              channelsRef.current.delete(normalizedState);
-              ensureChannel(normalizedState, userIdRef.current || presenceKey);
-            }
-          }, 2000);
-        }
-      });
+          channel.on("presence", { event: "sync" }, () => {
+            notifySync();
+          });
+          channel.on("presence", { event: "join" }, () => {
+            notifySync();
+          });
+          channel.on("presence", { event: "leave" }, () => {
+            notifySync();
+          });
 
-      channelsRef.current.set(normalizedState, channel);
-      setPresenceStatus("connecting");
-      return channel;
+          channel.subscribe((status: string) => {
+            if (status === "SUBSCRIBED") {
+              subscribedStatesRef.current.add(normalizedState);
+              markStateReady(normalizedState);
+              setPresenceStatus("connected");
+              void applyTrack(normalizedState);
+              applyAllOwnedTracks();
+              notifySync();
+              return;
+            }
+
+            if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+              subscribedStatesRef.current.delete(normalizedState);
+              channelsRef.current.delete(normalizedState);
+              void supabase.removeChannel(channel);
+              setReadyStates((current) => {
+                if (!current.has(normalizedState)) {
+                  return current;
+                }
+
+                const next = new Set(current);
+                next.delete(normalizedState);
+                return next;
+              });
+
+              window.setTimeout(() => {
+                if (
+                  isActiveRouteRef.current &&
+                  (ownersByStateRef.current.has(normalizedState) ||
+                    activeStateCodeRef.current === normalizedState)
+                ) {
+                  pendingChannelsRef.current.delete(normalizedState);
+                  ensureChannel(normalizedState, userIdRef.current || presenceKey);
+                }
+              }, 2000);
+            }
+          });
+
+          channelsRef.current.set(normalizedState, channel);
+        } finally {
+          pendingChannelsRef.current.delete(normalizedState);
+        }
+      })();
+
+      return null;
     },
     [applyAllOwnedTracks, applyTrack, markStateReady, notifySync, supabase]
   );
@@ -407,7 +424,7 @@ export function StatePresenceProvider({ children }: { children: ReactNode }) {
   );
 
   useEffect(() => {
-    if (!authReady || !isActiveRoute || !userId) {
+    if (!isActiveRoute || !userId) {
       return;
     }
 
@@ -425,7 +442,7 @@ export function StatePresenceProvider({ children }: { children: ReactNode }) {
     return () => {
       window.clearInterval(interval);
     };
-  }, [applyTrack, authReady, ensureChannel, isActiveRoute, userId]);
+  }, [applyTrack, ensureChannel, isActiveRoute, userId]);
 
   useEffect(() => {
     if (isActiveRoute) {
@@ -466,21 +483,24 @@ export function StatePresenceProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    if (activeStateCode) {
-      ensureChannel(activeStateCode, userId);
-    }
+    void prepareSupabaseRealtimeAuth(supabase).then(() => {
+      if (activeStateCode) {
+        ensureChannel(activeStateCode, userId);
+      }
 
-    for (const stateCode of ownersByStateRef.current.keys()) {
-      ensureChannel(stateCode, userId);
-    }
+      for (const stateCode of ownersByStateRef.current.keys()) {
+        ensureChannel(stateCode, userId);
+      }
 
-    applyAllOwnedTracks();
+      applyAllOwnedTracks();
+    });
   }, [
     activeStateCode,
     applyAllOwnedTracks,
     authReady,
     ensureChannel,
     isActiveRoute,
+    supabase,
     userId,
   ]);
 

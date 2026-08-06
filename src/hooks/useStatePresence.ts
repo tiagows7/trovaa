@@ -53,7 +53,7 @@ export function useStatePresence(
 
   useEffect(() => {
     if (!stateCode || !userId || !gender) return;
-    if (presenceStatus !== "connected") return;
+    if (!lobbyReady && presenceStatus !== "connected") return;
 
     updatePresence(ownerKey, stateCode, {
       userId,
@@ -63,6 +63,7 @@ export function useStatePresence(
     });
   }, [
     gender,
+    lobbyReady,
     lookingFor,
     options?.inConversation,
     ownerKey,

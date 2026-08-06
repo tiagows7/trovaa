@@ -13,7 +13,7 @@ import {
 import { usePathname } from "next/navigation";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import type { AuthChangeEvent, Session } from "@supabase/supabase-js";
-import { createClient } from "@/lib/supabase/client";
+import { createClient, prepareSupabaseRealtimeAuth } from "@/lib/supabase/client";
 import { useSupabaseRealtimeAuth } from "@/hooks/useSupabaseRealtimeAuth";
 
 const PLATFORM_PRESENCE_CHANNEL = "platform:online";
@@ -64,7 +64,7 @@ function mergeLobbyState(
 export function PlatformPresenceProvider({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const supabase = useMemo(() => createClient(), []);
-  const authReady = useSupabaseRealtimeAuth(supabase);
+  useSupabaseRealtimeAuth(supabase);
   const [userId, setUserId] = useState("");
   const [onlineUsers, setOnlineUsers] = useState<Map<string, string | null>>(
     new Map()
@@ -169,7 +169,7 @@ export function PlatformPresenceProvider({ children }: { children: ReactNode }) 
   }, [supabase]);
 
   useEffect(() => {
-    if (!authReady || !userId || !isActiveRoute) {
+    if (!userId || !isActiveRoute) {
       subscribedRef.current = false;
       if (channelRef.current) {
         void channelRef.current.untrack().catch(() => undefined);
@@ -182,44 +182,50 @@ export function PlatformPresenceProvider({ children }: { children: ReactNode }) 
 
     let active = true;
 
-    const channel = supabase.channel(PLATFORM_PRESENCE_CHANNEL, {
-      config: { presence: { key: userId } },
-    });
-
-    channel.on("presence", { event: "sync" }, () => {
-      syncOnlineUsers(channel);
-    });
-    channel.on("presence", { event: "join" }, () => {
-      syncOnlineUsers(channel);
-    });
-    channel.on("presence", { event: "leave" }, () => {
-      syncOnlineUsers(channel);
-    });
-
-    channel.subscribe((status: string) => {
+    void (async () => {
+      await prepareSupabaseRealtimeAuth(supabase);
       if (!active) return;
 
-      if (status === "SUBSCRIBED") {
-        subscribedRef.current = true;
-        void applyPlatformTrack();
-      } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
-        subscribedRef.current = false;
-      }
-    });
+      const channel = supabase.channel(PLATFORM_PRESENCE_CHANNEL, {
+        config: { presence: { key: userId } },
+      });
 
-    channelRef.current = channel;
+      channel.on("presence", { event: "sync" }, () => {
+        syncOnlineUsers(channel);
+      });
+      channel.on("presence", { event: "join" }, () => {
+        syncOnlineUsers(channel);
+      });
+      channel.on("presence", { event: "leave" }, () => {
+        syncOnlineUsers(channel);
+      });
+
+      channel.subscribe((status: string) => {
+        if (!active) return;
+
+        if (status === "SUBSCRIBED") {
+          subscribedRef.current = true;
+          void applyPlatformTrack();
+        } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+          subscribedRef.current = false;
+        }
+      });
+
+      channelRef.current = channel;
+    })();
 
     return () => {
       active = false;
       subscribedRef.current = false;
-      void channel.untrack().catch(() => undefined);
-      supabase.removeChannel(channel);
-      if (channelRef.current === channel) {
+      const channel = channelRef.current;
+      if (channel) {
+        void channel.untrack().catch(() => undefined);
+        supabase.removeChannel(channel);
         channelRef.current = null;
       }
       setOnlineUsers(new Map());
     };
-  }, [applyPlatformTrack, authReady, isActiveRoute, supabase, syncOnlineUsers, userId]);
+  }, [applyPlatformTrack, isActiveRoute, supabase, syncOnlineUsers, userId]);
 
   useEffect(() => {
     void lobbyStateVersion;

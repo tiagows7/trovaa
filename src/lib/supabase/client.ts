@@ -17,9 +17,20 @@ export function createClient() {
 }
 
 export async function prepareSupabaseRealtimeAuth(client: SupabaseClient) {
-  const {
+  let {
     data: { session },
   } = await client.auth.getSession();
+
+  if (!session?.access_token) {
+    const {
+      data: { user },
+    } = await client.auth.getUser();
+
+    if (user) {
+      const refreshed = await client.auth.refreshSession();
+      session = refreshed.data.session ?? session;
+    }
+  }
 
   if (!session?.access_token) {
     return false;

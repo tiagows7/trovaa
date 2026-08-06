@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { signupAction, type AuthActionState } from "@/lib/auth/actions";
 import { formatAuthError } from "@/lib/auth/errors";
 import { getSupabaseConfigError } from "@/lib/supabase/config";
+import { createClient, prepareSupabaseRealtimeAuth } from "@/lib/supabase/client";
 
 type ProfileGender = "masculino" | "feminino" | "outro";
 
@@ -97,6 +98,9 @@ export function AuthForm({ mode }: AuthFormProps) {
         setLoginPending(false);
         return;
       }
+
+      const supabase = createClient();
+      await prepareSupabaseRealtimeAuth(supabase);
 
       router.push("/salas");
       router.refresh();
