@@ -13,7 +13,17 @@ export function ChatWorkspaceContent({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      {isConversationRoute ? <ConversationPanels /> : children}
+      <div
+        className={
+          isConversationRoute
+            ? "hidden"
+            : "flex min-h-0 flex-1 flex-col"
+        }
+        aria-hidden={isConversationRoute}
+      >
+        {children}
+      </div>
+      {isConversationRoute ? <ConversationPanels /> : null}
     </div>
   );
 }

@@ -253,7 +253,7 @@ export function MatchFlow({
               preferredGender={selectedGender}
               viewerIsVip={viewerIsVip}
               pendingPartnerId={outgoingRequest?.targetId ?? null}
-              blockOtherConnections={Boolean(outgoingRequest) && !viewerIsVip}
+              blockOtherConnections={false}
               loadingTargetId={loadingTargetId}
               onSelect={startConversation}
               onBack={() => {

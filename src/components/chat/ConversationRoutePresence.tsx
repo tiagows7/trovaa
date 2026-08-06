@@ -25,6 +25,8 @@ export function ConversationRoutePresence({
     const ownerKey = `route:${conversationId}`;
     const normalizedState = stateCode.toUpperCase();
 
+    reportLobbyState(ownerKey, normalizedState);
+
     async function track() {
       const {
         data: { user },
@@ -65,9 +67,9 @@ export function ConversationRoutePresence({
 
     return () => {
       active = false;
+      reportLobbyState(ownerKey, null);
       if (trackedRef.current) {
         updatePresence(ownerKey, normalizedState, null);
-        reportLobbyState(ownerKey, null);
         trackedRef.current = false;
       }
     };

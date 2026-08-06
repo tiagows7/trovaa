@@ -89,8 +89,6 @@ export function ConversationTabsProvider({ children }: { children: ReactNode }) 
 
       setIsVip(roles.isVip);
 
-      if (!roles.isVip) return;
-
       const hydratedTabs = await loadActiveConversationTabs(supabase, userId);
       if (!active || hydratedTabs.length === 0) return;
 
@@ -125,7 +123,7 @@ export function ConversationTabsProvider({ children }: { children: ReactNode }) 
         );
         if (existing) return current;
 
-        if (!isVip || options?.replace) {
+        if (options?.replace) {
           return [tab];
         }
 
@@ -133,7 +131,7 @@ export function ConversationTabsProvider({ children }: { children: ReactNode }) 
       });
       setActiveTabId(tab.conversationId);
     },
-    [isVip]
+    []
   );
 
   const closeTab = useCallback(
@@ -184,7 +182,7 @@ export function ConversationTabsProvider({ children }: { children: ReactNode }) 
         );
         if (existing) return current;
 
-        if (!isVipRef.current || options?.replace) {
+        if (options?.replace) {
           return [tab];
         }
 
@@ -211,7 +209,7 @@ export function ConversationTabsProvider({ children }: { children: ReactNode }) 
         );
 
         if (tab) {
-          openAndActivate(tab, { replace: !roles.isVip });
+          openAndActivate(tab, { replace: false });
           return true;
         }
 

@@ -120,7 +120,7 @@ export function ConversationWorkspaceHeader() {
             })
           )}
 
-          {isVip && (
+          {tabs.length > 0 && (
             <button
               type="button"
               onClick={() => {
@@ -128,7 +128,7 @@ export function ConversationWorkspaceHeader() {
                 router.replace(lastState ? `/chat/${lastState}` : "/salas");
               }}
               className="shrink-0 rounded-xl border border-dashed border-violet-300 px-3 py-1.5 text-xs font-semibold text-violet-600 transition hover:bg-violet-50 dark:border-violet-700 dark:text-violet-300 dark:hover:bg-violet-950/40"
-              title="Abrir outra conversa em nova aba"
+              title="Abrir outra conversa"
             >
               + Nova
             </button>

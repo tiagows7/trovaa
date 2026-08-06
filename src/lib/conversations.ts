@@ -63,17 +63,9 @@ export async function canStartConversationWith(
   supabase: SupabaseClient,
   userId: string,
   partnerId: string,
-  isVip: boolean
+  _isVip: boolean
 ): Promise<{ allowed: boolean; existingConversationId?: string }> {
-  if (isVip) {
-    return { allowed: true };
-  }
-
   const active = await fetchActiveConversations(supabase, userId);
-
-  if (active.length === 0) {
-    return { allowed: true };
-  }
 
   const withSamePartner = active.find(
     (conversation) => conversation.partnerId === partnerId
@@ -83,7 +75,7 @@ export async function canStartConversationWith(
     return { allowed: true, existingConversationId: withSamePartner.id };
   }
 
-  return { allowed: false, existingConversationId: active[0]?.id };
+  return { allowed: true };
 }
 
 export function navigateToConversation(

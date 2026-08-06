@@ -67,9 +67,6 @@ export async function loadActiveConversationTabs(
   userId: string
 ): Promise<ConversationTab[]> {
   const roles = await loadUserProfileRoles(supabase, userId);
-  if (!roles.isVip) {
-    return [];
-  }
 
   const { data: conversations } = await supabase
     .from("conversations")
@@ -83,7 +80,7 @@ export async function loadActiveConversationTabs(
 
   const tabs = await Promise.all(
     conversations.map((conversation) =>
-      loadConversationTabMeta(supabase, conversation.id, userId, true)
+      loadConversationTabMeta(supabase, conversation.id, userId, roles.isVip)
     )
   );
 

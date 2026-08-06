@@ -47,7 +47,7 @@ export function ConversationTabSync({ conversationId }: ConversationTabSyncProps
       }
 
       markConversationSessionActive();
-      openAndActivate(tab, { replace: !roles.isVip });
+      openAndActivate(tab, { replace: false });
       setActiveTab(conversationId);
     }
 

@@ -276,14 +276,12 @@ export function ChatSidebar({
         </p>
 
         {!isVip && activeConversationId && (
-          <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-3 py-3 dark:border-amber-900/50 dark:bg-amber-950/30">
-            <p className="text-xs font-semibold text-amber-800 dark:text-amber-200">
-              1 conversa ativa
+          <div className="mt-4 rounded-xl border border-violet-200 bg-violet-50 px-3 py-3 dark:border-violet-900/50 dark:bg-violet-950/30">
+            <p className="text-xs font-semibold text-violet-800 dark:text-violet-200">
+              Conversas abertas
             </p>
-            <p className="mt-1 text-xs text-amber-700 dark:text-amber-300">
-              Você pode continuar vendo quem está online e pedir conexão com
-              outras pessoas. Para manter várias conversas abertas ao mesmo
-              tempo, assine o VIP.
+            <p className="mt-1 text-xs text-violet-700 dark:text-violet-300">
+              Você pode manter várias conversas ao mesmo tempo pelas abas no topo.
             </p>
             <button
               type="button"
