@@ -59,7 +59,6 @@ export function ChatSidebar({
   );
 
   const statesByRegion = useMemo(() => getStatesByRegion(), []);
-  const blocksNewConversations = !isVip && Boolean(activeConversationId);
   const { onlineUsers, countsByState } = usePlatformPresence();
   const conversationTabs = useOptionalConversationTabs();
 
@@ -169,10 +168,6 @@ export function ChatSidebar({
     }
   }
 
-  function handleBlockedStateAccess() {
-    alert(NON_VIP_SINGLE_CHAT_MESSAGE);
-  }
-
   function renderStateCountBadge(stateCode: string, isActive: boolean) {
     const connectedCount = getStateLobbyCount(countsByState, stateCode);
     if (connectedCount <= 0) return null;
@@ -197,26 +192,8 @@ export function ChatSidebar({
     const className = `flex items-center gap-2 rounded-xl px-3 py-2 text-sm transition ${
       isActive
         ? "bg-violet-600 text-white shadow-sm"
-        : blocksNewConversations
-          ? "cursor-not-allowed text-slate-400 opacity-60 dark:text-slate-500"
-          : "text-slate-700 hover:bg-violet-50 dark:text-slate-200 dark:hover:bg-slate-800"
+        : "text-slate-700 hover:bg-violet-50 dark:text-slate-200 dark:hover:bg-slate-800"
     }`;
-
-    if (blocksNewConversations) {
-      return (
-        <button
-          key={stateCode}
-          type="button"
-          onClick={handleBlockedStateAccess}
-          className={`w-full text-left ${className}`}
-          title="Sem VIP você só pode manter uma conversa ativa por vez"
-        >
-          <span className="w-7 shrink-0 font-bold">{stateCode}</span>
-          <span className="min-w-0 flex-1 truncate">{stateName}</span>
-          {renderStateCountBadge(stateCode, isActive)}
-        </button>
-      );
-    }
 
     return (
       <Link
@@ -304,7 +281,9 @@ export function ChatSidebar({
               1 conversa ativa
             </p>
             <p className="mt-1 text-xs text-amber-700 dark:text-amber-300">
-              Sem VIP você não pode abrir outra sala até encerrar a conversa atual.
+              Você pode continuar vendo quem está online e pedir conexão com
+              outras pessoas. Para manter várias conversas abertas ao mesmo
+              tempo, assine o VIP.
             </p>
             <button
               type="button"

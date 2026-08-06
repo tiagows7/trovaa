@@ -142,6 +142,7 @@ export function StatePresenceProvider({ children }: { children: ReactNode }) {
   const userIdRef = useRef("");
   const trackGenerationRef = useRef(0);
   const activeStateCodeRef = useRef<string | null>(null);
+  const releaseTimersRef = useRef(new Map<string, ReturnType<typeof setTimeout>>());
   const [userId, setUserId] = useState("");
 
   userIdRef.current = userId;
@@ -187,28 +188,55 @@ export function StatePresenceProvider({ children }: { children: ReactNode }) {
   const releaseUnusedChannels = useCallback(() => {
     const keepStates = getRequiredStates();
 
+    for (const stateCode of keepStates) {
+      const pendingRelease = releaseTimersRef.current.get(stateCode);
+      if (pendingRelease) {
+        clearTimeout(pendingRelease);
+        releaseTimersRef.current.delete(stateCode);
+      }
+    }
+
     for (const [stateCode, channel] of [...channelsRef.current.entries()]) {
       if (keepStates.has(stateCode)) {
         continue;
       }
 
-      subscribedStatesRef.current.delete(stateCode);
-      channelsRef.current.delete(stateCode);
-      setReadyStates((current) => {
-        if (!current.has(stateCode)) {
-          return current;
+      if (releaseTimersRef.current.has(stateCode)) {
+        continue;
+      }
+
+      const timer = setTimeout(() => {
+        releaseTimersRef.current.delete(stateCode);
+
+        if (getRequiredStates().has(stateCode)) {
+          return;
         }
 
-        const next = new Set(current);
-        next.delete(stateCode);
-        return next;
-      });
-      void supabase.removeChannel(channel);
+        subscribedStatesRef.current.delete(stateCode);
+        channelsRef.current.delete(stateCode);
+        setReadyStates((current) => {
+          if (!current.has(stateCode)) {
+            return current;
+          }
+
+          const next = new Set(current);
+          next.delete(stateCode);
+          return next;
+        });
+        void supabase.removeChannel(channel);
+      }, 3000);
+
+      releaseTimersRef.current.set(stateCode, timer);
     }
   }, [getRequiredStates, supabase]);
 
   const clearPresence = useCallback(async () => {
     trackGenerationRef.current += 1;
+
+    for (const timer of releaseTimersRef.current.values()) {
+      clearTimeout(timer);
+    }
+    releaseTimersRef.current.clear();
 
     const channels = new Map(channelsRef.current);
     const ownedStates = [...ownersByStateRef.current.keys()];

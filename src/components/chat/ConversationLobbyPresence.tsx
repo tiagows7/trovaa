@@ -4,7 +4,6 @@ import { useEffect, useMemo, useState } from "react";
 import { useConversationTabs } from "@/contexts/ConversationTabsContext";
 import { useStatePresenceContext } from "@/contexts/StatePresenceContext";
 import { usePlatformPresence } from "@/contexts/PlatformPresenceContext";
-import { loadUserProfileRoles } from "@/lib/admin";
 import { createClient } from "@/lib/supabase/client";
 import type { ProfileGender } from "@/types/database";
 
@@ -15,7 +14,6 @@ export function ConversationLobbyPresence() {
   const supabase = useMemo(() => createClient(), []);
   const [userId, setUserId] = useState("");
   const [gender, setGender] = useState<ProfileGender | null>(null);
-  const [isVip, setIsVip] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -28,24 +26,19 @@ export function ConversationLobbyPresence() {
       if (!user || !active) {
         setUserId("");
         setGender(null);
-        setIsVip(false);
         return;
       }
 
-      const [{ data: profile }, roles] = await Promise.all([
-        supabase
-          .from("profiles")
-          .select("gender")
-          .eq("id", user.id)
-          .maybeSingle(),
-        loadUserProfileRoles(supabase, user.id),
-      ]);
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("gender")
+        .eq("id", user.id)
+        .maybeSingle();
 
       if (!active) return;
 
       setUserId(user.id);
       setGender((profile?.gender as ProfileGender | null) ?? null);
-      setIsVip(roles.isVip);
     }
 
     void loadProfile();
@@ -56,7 +49,6 @@ export function ConversationLobbyPresence() {
       if (!session?.user) {
         setUserId("");
         setGender(null);
-        setIsVip(false);
         return;
       }
 
@@ -77,8 +69,8 @@ export function ConversationLobbyPresence() {
         userId,
         gender,
         lookingFor: null,
-        inConversation: !isVip,
-        openToMatch: isVip,
+        inConversation: true,
+        openToMatch: true,
       });
       reportLobbyState(`conversa:${tab.conversationId}`, tab.stateCode);
     }
@@ -89,7 +81,7 @@ export function ConversationLobbyPresence() {
         reportLobbyState(`conversa:${tab.conversationId}`, null);
       }
     };
-  }, [gender, isVip, reportLobbyState, tabs, updatePresence, userId]);
+  }, [gender, reportLobbyState, tabs, updatePresence, userId]);
 
   return null;
 }

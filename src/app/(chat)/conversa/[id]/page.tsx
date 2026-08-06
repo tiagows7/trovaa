@@ -22,7 +22,7 @@ export default async function ConversationPage({ params }: ConversationPageProps
 
   const { data: conversation } = await supabase
     .from("conversations")
-    .select("id, user_a_id, user_b_id, ended_at")
+    .select("id, user_a_id, user_b_id, state_code, ended_at")
     .eq("id", id)
     .maybeSingle();
 
@@ -36,7 +36,10 @@ export default async function ConversationPage({ params }: ConversationPageProps
 
   return (
     <>
-      <ConversationRoutePresence conversationId={id} />
+      <ConversationRoutePresence
+        conversationId={id}
+        stateCode={conversation.state_code}
+      />
       <ConversationTabSync conversationId={id} />
     </>
   );

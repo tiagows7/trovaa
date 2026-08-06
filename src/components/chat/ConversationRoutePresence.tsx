@@ -3,25 +3,27 @@
 import { useEffect, useMemo, useRef } from "react";
 import { usePlatformPresence } from "@/contexts/PlatformPresenceContext";
 import { useStatePresenceContext } from "@/contexts/StatePresenceContext";
-import { loadUserProfileRoles } from "@/lib/admin";
 import { createClient } from "@/lib/supabase/client";
 import type { ProfileGender } from "@/types/database";
 
 type ConversationRoutePresenceProps = {
   conversationId: string;
+  stateCode: string;
 };
 
 export function ConversationRoutePresence({
   conversationId,
+  stateCode,
 }: ConversationRoutePresenceProps) {
   const { updatePresence } = useStatePresenceContext();
   const { reportLobbyState } = usePlatformPresence();
   const supabase = useMemo(() => createClient(), []);
-  const stateCodeRef = useRef<string | null>(null);
+  const trackedRef = useRef(false);
 
   useEffect(() => {
     let active = true;
     const ownerKey = `route:${conversationId}`;
+    const normalizedState = stateCode.toUpperCase();
 
     async function track() {
       const {
@@ -30,55 +32,52 @@ export function ConversationRoutePresence({
 
       if (!user || !active) return;
 
-      const [{ data: conversation }, { data: profile }, roles] =
-        await Promise.all([
-          supabase
-            .from("conversations")
-            .select("state_code, ended_at")
-            .eq("id", conversationId)
-            .maybeSingle(),
-          supabase
-            .from("profiles")
-            .select("gender")
-            .eq("id", user.id)
-            .maybeSingle(),
-          loadUserProfileRoles(supabase, user.id),
-        ]);
+      const [{ data: conversation }, { data: profile }] = await Promise.all([
+        supabase
+          .from("conversations")
+          .select("ended_at")
+          .eq("id", conversationId)
+          .maybeSingle(),
+        supabase
+          .from("profiles")
+          .select("gender")
+          .eq("id", user.id)
+          .maybeSingle(),
+      ]);
 
-      if (
-        !active ||
-        !conversation ||
-        conversation.ended_at ||
-        !profile?.gender
-      ) {
+      if (!active || !conversation || conversation.ended_at || !profile?.gender) {
         return;
       }
 
-      const stateCode = conversation.state_code.toUpperCase();
-      stateCodeRef.current = stateCode;
+      trackedRef.current = true;
 
-      updatePresence(ownerKey, stateCode, {
+      updatePresence(ownerKey, normalizedState, {
         userId: user.id,
         gender: profile.gender as ProfileGender,
         lookingFor: null,
-        inConversation: !roles.isVip,
-        openToMatch: roles.isVip,
+        inConversation: true,
+        openToMatch: true,
       });
-      reportLobbyState(ownerKey, stateCode);
+      reportLobbyState(ownerKey, normalizedState);
     }
 
     void track();
 
     return () => {
       active = false;
-      const stateCode = stateCodeRef.current;
-      if (stateCode) {
-        updatePresence(ownerKey, stateCode, null);
+      if (trackedRef.current) {
+        updatePresence(ownerKey, normalizedState, null);
         reportLobbyState(ownerKey, null);
+        trackedRef.current = false;
       }
-      stateCodeRef.current = null;
     };
-  }, [conversationId, reportLobbyState, supabase, updatePresence]);
+  }, [
+    conversationId,
+    reportLobbyState,
+    stateCode,
+    supabase,
+    updatePresence,
+  ]);
 
   return null;
 }
