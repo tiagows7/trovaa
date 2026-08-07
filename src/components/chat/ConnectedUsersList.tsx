@@ -207,7 +207,9 @@ export function ConnectedUsersList({
             </p>
             <p className="mt-2 text-xs text-slate-400">
               {presenceStatus === "connected"
-                ? "Aguarde — quando alguém compatível entrar na sala, aparecerá aqui automaticamente."
+                ? users.length > 0
+                  ? `Há ${users.length} pessoa(s) online nesta sala, mas nenhuma com o perfil selecionado.`
+                  : "Aguarde — quando alguém compatível entrar na sala, aparecerá aqui automaticamente."
                 : "Assim que a conexão for estabelecida, a lista começa a atualizar."}
             </p>
           </div>

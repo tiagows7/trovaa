@@ -5,6 +5,7 @@ import type { RealtimeChannel } from "@supabase/supabase-js";
 import { createClient, prepareSupabaseRealtimeAuth } from "@/lib/supabase/client";
 import {
   applyStateChannelTrack,
+  createStatePresenceChannel,
   type StatePresenceTrack,
 } from "@/lib/state-presence-utils";
 import { useSupabaseRealtimeAuth } from "@/hooks/useSupabaseRealtimeAuth";
@@ -27,11 +28,11 @@ export function useStateChannelTracker(
   onSyncRef.current = options?.onSync;
   const channelRef = useRef<RealtimeChannel | null>(null);
   const subscribedRef = useRef(false);
+  const connectingRef = useRef(false);
 
-  const publishTrack = useCallback(async () => {
-    const channel = channelRef.current;
+  const publishTrack = useCallback(async (channel: RealtimeChannel) => {
     const current = trackRef.current;
-    if (!channel || !subscribedRef.current || !current) return false;
+    if (!subscribedRef.current || !current) return false;
 
     try {
       await applyStateChannelTrack(channel, current);
@@ -52,78 +53,83 @@ export function useStateChannelTracker(
 
     async function connect(attempt = 0) {
       const current = trackRef.current;
-      if (!active || !current) return;
+      if (!active || !current || connectingRef.current) return;
 
+      connectingRef.current = true;
       subscribedRef.current = false;
 
-      const authed = await prepareSupabaseRealtimeAuth(supabase);
-      if (!active || !trackRef.current) return;
-
-      if (!authed) {
-        if (attempt < 8) {
-          retryTimer = setTimeout(() => {
-            void connect(attempt + 1);
-          }, 500 * (attempt + 1));
-        }
-        return;
-      }
-
-      if (channelRef.current) {
-        try {
-          await channelRef.current.untrack();
-        } catch {
-          // ignore
-        }
-        supabase.removeChannel(channelRef.current);
-        channelRef.current = null;
-      }
-
-      const channel = supabase.channel(`state:${current.stateCode}`, {
-        config: { presence: { key: current.userId } },
-      });
-
-      channel.on("presence", { event: "sync" }, () => onSyncRef.current?.());
-      channel.on("presence", { event: "join" }, () => {
-        window.setTimeout(() => onSyncRef.current?.(), 150);
-      });
-      channel.on("presence", { event: "leave" }, () => onSyncRef.current?.());
-
-      channel.subscribe(async (status: string) => {
+      try {
+        const authed = await prepareSupabaseRealtimeAuth(supabase);
         if (!active || !trackRef.current) return;
 
-        if (status === "SUBSCRIBED") {
-          subscribedRef.current = true;
-          const tracked = await publishTrack();
-          if (!tracked || !active) return;
-
-          for (const delay of [250, 750, 1500, 3000, 6000]) {
-            window.setTimeout(() => {
-              if (active) void publishTrack();
-            }, delay);
+        if (!authed) {
+          if (attempt < 8) {
+            retryTimer = setTimeout(() => {
+              void connect(attempt + 1);
+            }, 500 * (attempt + 1));
           }
           return;
         }
 
-        if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
-          subscribedRef.current = false;
-          retryTimer = setTimeout(() => {
-            void connect(0);
-          }, 2000);
+        const existing = channelRef.current;
+        if (existing) {
+          try {
+            await existing.untrack();
+          } catch {
+            // ignore
+          }
+          supabase.removeChannel(existing);
+          channelRef.current = null;
         }
-      });
 
-      channelRef.current = channel;
+        const channel = createStatePresenceChannel(
+          supabase,
+          current.stateCode,
+          current.userId
+        );
+        channelRef.current = channel;
+
+        channel.subscribe(async (status: string) => {
+          if (!active || !trackRef.current) return;
+
+          if (status === "SUBSCRIBED") {
+            subscribedRef.current = true;
+            const tracked = await publishTrack(channel);
+            if (!tracked || !active) return;
+
+            for (const delay of [250, 750, 1500, 3000, 6000]) {
+              window.setTimeout(() => {
+                if (active) void publishTrack(channel);
+              }, delay);
+            }
+            return;
+          }
+
+          if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+            subscribedRef.current = false;
+            retryTimer = setTimeout(() => {
+              void connect(0);
+            }, 2000);
+          }
+        });
+      } finally {
+        connectingRef.current = false;
+      }
     }
 
     void connect();
 
     const interval = window.setInterval(() => {
-      void publishTrack();
+      const channel = channelRef.current;
+      if (channel) {
+        void publishTrack(channel);
+      }
     }, 5000);
 
     return () => {
       active = false;
       subscribedRef.current = false;
+      connectingRef.current = false;
       if (retryTimer) clearTimeout(retryTimer);
       clearInterval(interval);
 
@@ -147,9 +153,12 @@ export function useStateChannelTracker(
   ]);
 
   useEffect(() => {
-    if (!authReady || !trackRef.current || !subscribedRef.current) return;
+    const channel = channelRef.current;
+    if (!authReady || !trackRef.current || !subscribedRef.current || !channel) {
+      return;
+    }
 
-    void publishTrack();
+    void publishTrack(channel);
   }, [
     authReady,
     publishTrack,

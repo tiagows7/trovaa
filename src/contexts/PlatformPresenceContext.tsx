@@ -198,7 +198,7 @@ export function PlatformPresenceProvider({ children }: { children: ReactNode }) 
       if (!active) return;
 
       const channel = supabase.channel(PLATFORM_PRESENCE_CHANNEL, {
-        config: { presence: { key: userId } },
+        config: { presence: { key: userId, enabled: true } },
       });
 
       channel.on("presence", { event: "sync" }, () => {
