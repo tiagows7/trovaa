@@ -149,7 +149,7 @@ export function useStatePresence(
     void applyStateChannelTrack(channelRef.current, {
       stateCode: normalizedState,
       userId,
-      gender: profileGender,
+      gender,
       lookingFor,
       inConversation,
     })
