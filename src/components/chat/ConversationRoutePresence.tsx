@@ -10,6 +10,7 @@ type ConversationRoutePresenceProps = {
   stateCode: string;
   userId: string;
   gender: ProfileGender;
+  isVip: boolean;
 };
 
 export function ConversationRoutePresence({
@@ -17,6 +18,7 @@ export function ConversationRoutePresence({
   stateCode,
   userId,
   gender,
+  isVip,
 }: ConversationRoutePresenceProps) {
   const { reportLobbyState } = usePlatformPresence();
   const ownerKey = useMemo(
@@ -31,6 +33,7 @@ export function ConversationRoutePresence({
     gender,
     lookingFor: null,
     inConversation: true,
+    isVip,
   });
 
   useEffect(() => {

@@ -15,6 +15,7 @@ export type PresenceUser = {
   gender: ProfileGender;
   lookingFor: ProfileGender | null;
   inConversation?: boolean;
+  isVip?: boolean;
 };
 
 export function useStatePresence(
@@ -22,7 +23,7 @@ export function useStatePresence(
   userId: string,
   gender: ProfileGender | null,
   lookingFor: ProfileGender | null = null,
-  options?: { inConversation?: boolean }
+  options?: { inConversation?: boolean; isVip?: boolean }
 ) {
   const supabase = useMemo(() => createClient(), []);
   const { reportLobbyState } = usePlatformPresence();
@@ -41,6 +42,7 @@ export function useStatePresence(
 
   const normalizedState = stateCode.toUpperCase();
   const inConversation = options?.inConversation ?? false;
+  const isVip = options?.isVip ?? false;
 
   useEffect(() => {
     if (!stateCode || !userId || !gender) {
@@ -91,6 +93,7 @@ export function useStatePresence(
               gender: profileGender,
               lookingFor,
               inConversation,
+              isVip,
             });
           } catch {
             setPresenceStatus("error");
@@ -134,6 +137,7 @@ export function useStatePresence(
   }, [
     gender,
     inConversation,
+    isVip,
     lookingFor,
     normalizedState,
     ownerKey,
@@ -152,6 +156,7 @@ export function useStatePresence(
       gender,
       lookingFor,
       inConversation,
+      isVip,
     })
       .then(() => {
         if (channelRef.current) {
@@ -162,6 +167,7 @@ export function useStatePresence(
   }, [
     gender,
     inConversation,
+    isVip,
     lookingFor,
     normalizedState,
     userId,

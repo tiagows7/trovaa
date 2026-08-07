@@ -17,6 +17,7 @@ import {
   canStartConversationWith,
   formatConversationError,
   isNonVipConversationLimitError,
+  isNonVipTargetBusyError,
   NON_VIP_SINGLE_CHAT_MESSAGE,
 } from "@/lib/conversations";
 import type { ProfileGender } from "@/types/database";
@@ -59,7 +60,8 @@ export function MatchFlow({
     stateCode,
     userId,
     userGender,
-    lookingFor
+    lookingFor,
+    { isVip: viewerIsVip }
   );
   const { outgoingRequest, refreshRequests } = useConnectionRequests();
   const { openConversationById } = useConversationTabs();
@@ -252,7 +254,8 @@ export function MatchFlow({
               {error && (
                 <p className="mt-4 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-600">
                   {error}
-                  {isNonVipConversationLimitError(error) && (
+                  {(isNonVipConversationLimitError(error) ||
+                    isNonVipTargetBusyError(error)) && (
                     <Link href="/vip" className="mt-2 block font-semibold text-violet-600 hover:underline">
                       Ver plano VIP — {VIP_PRICE_LABEL}/mês
                     </Link>
@@ -282,7 +285,8 @@ export function MatchFlow({
           {step === "browse" && error && (
             <p className="mx-auto mt-4 max-w-lg rounded-xl bg-red-50 px-4 py-3 text-sm text-red-600">
               {error}
-              {isNonVipConversationLimitError(error) && (
+              {(isNonVipConversationLimitError(error) ||
+                isNonVipTargetBusyError(error)) && (
                 <Link href="/vip" className="mt-2 block font-semibold text-violet-600 hover:underline">
                   Ver plano VIP — {VIP_PRICE_LABEL}/mês
                 </Link>

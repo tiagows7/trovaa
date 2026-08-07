@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { loadUserVipStatus } from "@/lib/admin";
 
 function normalizeStateCode(stateCode: string) {
   const normalized = stateCode.toUpperCase();
@@ -26,6 +27,21 @@ async function findActiveConversationId(
   return data?.id ?? null;
 }
 
+async function userHasActiveConversation(
+  admin: SupabaseClient,
+  userId: string
+) {
+  const { data } = await admin
+    .from("conversations")
+    .select("id")
+    .is("ended_at", null)
+    .or(`user_a_id.eq.${userId},user_b_id.eq.${userId}`)
+    .limit(1)
+    .maybeSingle();
+
+  return Boolean(data?.id);
+}
+
 export async function requestConnectionWithAdmin(
   admin: SupabaseClient,
   requesterId: string,
@@ -49,6 +65,19 @@ export async function requestConnectionWithAdmin(
       status: "existing" as const,
       conversationId: existingConversationId,
     };
+  }
+
+  const [requesterIsVip, targetIsVip] = await Promise.all([
+    loadUserVipStatus(admin, requesterId),
+    loadUserVipStatus(admin, targetId),
+  ]);
+
+  if (!requesterIsVip && (await userHasActiveConversation(admin, requesterId))) {
+    throw new Error("NON_VIP_SINGLE_CHAT_LIMIT");
+  }
+
+  if (!targetIsVip && (await userHasActiveConversation(admin, targetId))) {
+    throw new Error("NON_VIP_TARGET_BUSY");
   }
 
   await admin

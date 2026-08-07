@@ -10,6 +10,7 @@ export type StatePresenceTrack = {
   gender: ProfileGender;
   lookingFor: ProfileGender | null;
   inConversation: boolean;
+  isVip: boolean;
 };
 
 type TrackOptions = StatePresenceTrack & {
@@ -27,6 +28,7 @@ export async function applyStateChannelTrack(
     looking_for: track.lookingFor,
     state_code: normalizedState,
     in_conversation: track.inConversation,
+    is_vip: track.isVip,
   });
 }
 
@@ -120,6 +122,7 @@ export function useStateChannelTracker(
     supabase,
     track?.gender,
     track?.inConversation,
+    track?.isVip,
     track?.lookingFor,
     track?.stateCode,
     track?.userId,
@@ -135,6 +138,7 @@ export function readStateChannelUsers(
     gender?: ProfileGender;
     looking_for?: ProfileGender | null;
     in_conversation?: boolean;
+    is_vip?: boolean;
   };
 
   const state = channel.presenceState<PresencePayload>();
@@ -145,6 +149,7 @@ export function readStateChannelUsers(
       gender: ProfileGender;
       lookingFor: ProfileGender | null;
       inConversation: boolean;
+      isVip: boolean;
     }
   >();
 
@@ -160,6 +165,7 @@ export function readStateChannelUsers(
           gender: presence.gender,
           lookingFor: presence.looking_for ?? null,
           inConversation: presence.in_conversation ?? false,
+          isVip: presence.is_vip ?? false,
         });
       }
     }

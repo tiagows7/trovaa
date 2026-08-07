@@ -8,6 +8,9 @@ type ConversationRouter = {
 export const NON_VIP_SINGLE_CHAT_MESSAGE =
   "Sem VIP você só pode conversar com uma pessoa por vez. Assine o VIP para abrir várias conversas em abas no app.";
 
+export const NON_VIP_TARGET_BUSY_MESSAGE =
+  "Esta pessoa já está em uma conversa e não pode receber novos convites (conta sem VIP).";
+
 export function isNonVipConversationLimitError(message: string) {
   return (
     message.includes("NON_VIP_SINGLE_CHAT_LIMIT") ||
@@ -15,9 +18,20 @@ export function isNonVipConversationLimitError(message: string) {
   );
 }
 
+export function isNonVipTargetBusyError(message: string) {
+  return (
+    message.includes("NON_VIP_TARGET_BUSY") ||
+    message.includes("não pode receber novos convites")
+  );
+}
+
 export function formatConversationError(message: string) {
   if (isNonVipConversationLimitError(message)) {
     return NON_VIP_SINGLE_CHAT_MESSAGE;
+  }
+
+  if (isNonVipTargetBusyError(message)) {
+    return NON_VIP_TARGET_BUSY_MESSAGE;
   }
 
   return message;

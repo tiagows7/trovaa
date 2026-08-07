@@ -7,6 +7,7 @@ import { usePlatformPresence } from "@/contexts/PlatformPresenceContext";
 import { useStateChannelTracker } from "@/hooks/useStateChannelTracker";
 import type { Session } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/client";
+import { isProfileVip } from "@/lib/vip";
 import type { ProfileGender } from "@/types/database";
 
 type ActiveConversationRef = {
@@ -21,6 +22,7 @@ export function ConversationLobbyPresence() {
   const supabase = useMemo(() => createClient(), []);
   const [userId, setUserId] = useState("");
   const [gender, setGender] = useState<ProfileGender | null>(null);
+  const [isVip, setIsVip] = useState(false);
   const [activeConversations, setActiveConversations] = useState<
     ActiveConversationRef[]
   >([]);
@@ -36,12 +38,17 @@ export function ConversationLobbyPresence() {
       if (!user || !active) {
         setUserId("");
         setGender(null);
+        setIsVip(false);
         setActiveConversations([]);
         return;
       }
 
       const [{ data: profile }, { data: conversations }] = await Promise.all([
-        supabase.from("profiles").select("gender").eq("id", user.id).maybeSingle(),
+        supabase
+          .from("profiles")
+          .select("gender, is_vip, vip_until")
+          .eq("id", user.id)
+          .maybeSingle(),
         supabase
           .from("conversations")
           .select("id, state_code")
@@ -53,6 +60,7 @@ export function ConversationLobbyPresence() {
 
       setUserId(user.id);
       setGender((profile?.gender as ProfileGender | null) ?? null);
+      setIsVip(isProfileVip(profile ?? undefined));
       setActiveConversations(
         (conversations ?? []).map(
           (conversation: { id: string; state_code: string }) => ({
@@ -72,6 +80,7 @@ export function ConversationLobbyPresence() {
         if (!session?.user) {
           setUserId("");
           setGender(null);
+          setIsVip(false);
           setActiveConversations([]);
           return;
         }
@@ -132,6 +141,7 @@ export function ConversationLobbyPresence() {
           gender,
           lookingFor: null,
           inConversation: true,
+          isVip,
         }
       : null
   );

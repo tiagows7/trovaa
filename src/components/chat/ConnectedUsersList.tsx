@@ -34,6 +34,8 @@ function getAvailabilityLabel(
   switch (availability) {
     case "also_in_conversation":
       return "Online · outra conversa ativa";
+    case "busy_in_conversation":
+      return "Em conversa · indisponível";
     case "waiting_profile":
       return hint ?? "Aguardando outro perfil";
     default:
@@ -118,11 +120,12 @@ export function ConnectedUsersList({
 
       {!viewerIsVip && (
         <p className="mt-3 rounded-xl border border-violet-200 bg-violet-50 px-4 py-3 text-sm text-violet-800 dark:border-violet-900/50 dark:bg-violet-950/30 dark:text-violet-200">
-          Quem já está em outra conversa aparece como disponível para um novo chat.{" "}
+          Quem já está em conversa sem VIP não pode receber novos convites. VIPs
+          podem conversar com várias pessoas ao mesmo tempo.{" "}
           <a href="/vip" className="font-semibold underline">
             Seja VIP por {VIP_PRICE_LABEL}/mês
-          </a>{" "}
-          para ver nomes reais e abrir várias abas no app.
+          </a>
+          .
         </p>
       )}
 
@@ -200,6 +203,8 @@ export function ConnectedUsersList({
                           ? "text-emerald-600 dark:text-emerald-400"
                           : availability === "also_in_conversation"
                             ? "text-violet-600 dark:text-violet-300"
+                            : availability === "busy_in_conversation"
+                              ? "text-slate-500 dark:text-slate-400"
                             : "text-amber-600 dark:text-amber-400"
                       }`}
                     >
@@ -209,6 +214,8 @@ export function ConnectedUsersList({
                             ? "bg-emerald-500"
                             : availability === "also_in_conversation"
                               ? "bg-violet-500"
+                              : availability === "busy_in_conversation"
+                                ? "bg-slate-400"
                               : "bg-amber-500"
                         }`}
                       />

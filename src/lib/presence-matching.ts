@@ -93,6 +93,7 @@ export function filterVisibleUsersByGender(
 export type UserAvailability =
   | "connectable"
   | "also_in_conversation"
+  | "busy_in_conversation"
   | "waiting_profile";
 
 export function getUserAvailability(
@@ -106,7 +107,7 @@ export function getUserAvailability(
   }
 
   if (user.inConversation) {
-    return "also_in_conversation";
+    return user.isVip ? "also_in_conversation" : "busy_in_conversation";
   }
 
   return "connectable";
