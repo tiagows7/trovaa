@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import { getDisplayName } from "@/lib/anonymous-names";
 import { getConnectedListTitle } from "@/lib/matching";
 import {
-  filterMatchableUsers,
+  filterVisibleUsersByGender,
   getUnavailableMatchHint,
   getUserAvailability,
   isUserConnectable,
@@ -66,14 +66,8 @@ export function ConnectedUsersList({
   const [feedback, setFeedback] = useState<string | null>(null);
 
   const visibleUsers = useMemo(
-    () =>
-      filterMatchableUsers(
-        users,
-        viewerGender,
-        preferredGender,
-        viewerLookingFor
-      ),
-    [preferredGender, users, viewerGender, viewerLookingFor]
+    () => filterVisibleUsersByGender(users, preferredGender),
+    [preferredGender, users]
   );
 
   const visibleUserIds = useMemo(
