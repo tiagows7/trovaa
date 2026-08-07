@@ -17,6 +17,10 @@ import {
 import { requestConnection } from "@/lib/connection-requests";
 import { useConnectionRequests } from "@/contexts/ConnectionRequestsContext";
 import { useConversationTabs } from "@/contexts/ConversationTabsContext";
+import {
+  usePlatformPresence,
+  getStateLobbyCount,
+} from "@/contexts/PlatformPresenceContext";
 import { VIP_PRICE_LABEL } from "@/lib/vip-plan";
 import {
   canStartConversationWith,
@@ -68,6 +72,13 @@ export function MatchFlow({
     lookingFor,
     { isVip: viewerIsVip }
   );
+  const { countsByState } = usePlatformPresence();
+  const platformRoomCount = getStateLobbyCount(countsByState, stateCode);
+  const localRoomCount = onlineUsers.length + 1;
+  const isSyncingRoom =
+    presenceStatus === "connected" &&
+    platformRoomCount > localRoomCount &&
+    onlineUsers.length === 0;
   const { outgoingRequest, refreshRequests } = useConnectionRequests();
   const { openConversationById } = useConversationTabs();
 
@@ -190,7 +201,13 @@ export function MatchFlow({
                 quem quer conversar para ver a lista e enviar pedido de conexão.
                 {presenceStatus === "connected" && (
                   <span className="mt-1 block text-emerald-600 dark:text-emerald-400">
-                    {onlineUsers.length + 1} pessoa(s) nesta sala (incluindo você).
+                    {localRoomCount} pessoa(s) nesta sala (incluindo você).
+                    {isSyncingRoom && (
+                      <span className="mt-1 block text-slate-500 dark:text-slate-400">
+                        Sincronizando lista de pessoas online… aguarde alguns
+                        segundos.
+                      </span>
+                    )}
                   </span>
                 )}
                 {presenceStatus === "connecting" && (

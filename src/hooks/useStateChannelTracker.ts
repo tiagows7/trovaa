@@ -40,13 +40,19 @@ export function useStateChannelTracker(
     };
 
     async function syncTrack() {
-      if (!active || !trackRef.current) return;
-      await trackManagedStatePresence(
+      if (!active || !trackRef.current) return false;
+
+      const tracked = await trackManagedStatePresence(
         trackRef.current.stateCode,
         trackRef.current.userId,
         trackRef.current
       );
-      notify();
+
+      if (tracked) {
+        notify();
+      }
+
+      return tracked;
     }
 
     async function connect(current: StatePresenceTrack) {
@@ -64,9 +70,12 @@ export function useStateChannelTracker(
 
         if (!active || !trackRef.current) return;
 
-        await syncTrack();
+        const tracked = await syncTrack();
+        if (!tracked) {
+          throw new Error("Presence track failed");
+        }
 
-        for (const delay of [250, 750, 1500, 3000]) {
+        for (const delay of [250, 750, 1500, 3000, 6000]) {
           window.setTimeout(() => {
             if (active) {
               void syncTrack();

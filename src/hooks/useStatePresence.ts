@@ -64,13 +64,7 @@ export function useStatePresence(
   const refreshOnlineUsers = useCallback(() => {
     if (!userId || !normalizedState) return;
 
-    const next = readManagedStateUsers(normalizedState, userId);
-    setOnlineUsers((current) => {
-      if (next.length === 0 && current.length > 0) {
-        return current;
-      }
-      return next;
-    });
+    setOnlineUsers(readManagedStateUsers(normalizedState, userId));
   }, [normalizedState, userId]);
 
   useEffect(() => {
@@ -204,6 +198,31 @@ export function useStatePresence(
     isVip,
     lookingFor,
     normalizedState,
+    presenceStatus,
+    refreshOnlineUsers,
+    userId,
+  ]);
+
+  useEffect(() => {
+    if (presenceStatus !== "connected" || onlineUsers.length > 0) return;
+
+    refreshOnlineUsers();
+
+    const interval = window.setInterval(() => {
+      refreshOnlineUsers();
+      void trackManagedStatePresence(
+        normalizedState,
+        userId,
+        trackRef.current
+      );
+    }, 1500);
+
+    return () => {
+      window.clearInterval(interval);
+    };
+  }, [
+    normalizedState,
+    onlineUsers.length,
     presenceStatus,
     refreshOnlineUsers,
     userId,

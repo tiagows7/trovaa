@@ -127,8 +127,12 @@ export async function acquireStatePresenceChannel(
       }
 
       if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
-        entry!.subscribed = false;
+        const failed = entry!;
+        failed.subscribed = false;
         rejectReady(new Error(`Presence channel ${status}`));
+        entries.delete(key);
+        void supabase.removeChannel(failed.channel);
+        notifyEntry(failed);
       }
     });
   }
