@@ -5,27 +5,15 @@ import Link from "next/link";
 import { ChatSidebar } from "@/components/chat/ChatSidebar";
 import { CONVERSA_SESSION_KEY } from "@/components/chat/ConversationSessionCleanup";
 import { VIP_PRICE_LABEL } from "@/lib/vip-plan";
-import type { SavedUserEntry } from "@/lib/saved-users";
 
 type SalasClientProps = {
   userId: string;
   isVip: boolean;
   isAdmin: boolean;
-  initialSavedUsers: SavedUserEntry[];
 };
 
-export function SalasClient({
-  userId,
-  isVip,
-  isAdmin,
-  initialSavedUsers,
-}: SalasClientProps) {
-  const [savedUsers, setSavedUsers] = useState(initialSavedUsers);
+export function SalasClient({ userId, isVip, isAdmin }: SalasClientProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
-
-  useEffect(() => {
-    setSavedUsers(initialSavedUsers);
-  }, [initialSavedUsers]);
 
   useEffect(() => {
     if (sessionStorage.getItem(CONVERSA_SESSION_KEY)) {
@@ -39,7 +27,6 @@ export function SalasClient({
     <div className="flex h-full min-h-0 bg-gradient-to-br from-fuchsia-50 via-white to-cyan-50 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950">
       <ChatSidebar
         userId={userId}
-        initialSavedUsers={savedUsers}
         isOpen={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
         isVip={isVip}
@@ -70,17 +57,9 @@ export function SalasClient({
               Use o menu lateral para selecionar o estado onde quer conversar.
               Depois escolha com quem falar e veja quem está online.
             </p>
-            {isVip && savedUsers.length > 0 && (
-              <p className="mt-4 text-sm text-amber-700 dark:text-amber-300">
-                Você tem {savedUsers.length} usuário
-                {savedUsers.length === 1 ? "" : "s"} salvo
-                {savedUsers.length === 1 ? "" : "s"} no menu.
-              </p>
-            )}
             {!isVip && (
               <p className="mt-4 text-sm text-slate-500 dark:text-slate-400">
-                VIP ({VIP_PRICE_LABEL}/mês): lista automática de quem você conversou,
-                nomes reais e várias conversas em abas.
+                VIP ({VIP_PRICE_LABEL}/mês): nomes reais e várias conversas em abas.
               </p>
             )}
             <p className="mt-6 text-xs text-slate-400 lg:hidden">

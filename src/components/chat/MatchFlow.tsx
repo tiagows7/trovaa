@@ -20,7 +20,6 @@ import {
   NON_VIP_SINGLE_CHAT_MESSAGE,
 } from "@/lib/conversations";
 import type { ProfileGender } from "@/types/database";
-import type { SavedUserEntry } from "@/lib/saved-users";
 
 type MatchFlowProps = {
   userId: string;
@@ -29,7 +28,6 @@ type MatchFlowProps = {
   userGender: ProfileGender | null;
   isVip: boolean;
   isAdmin: boolean;
-  initialSavedUsers: SavedUserEntry[];
 };
 
 type MatchStep = "choose" | "browse";
@@ -41,7 +39,6 @@ export function MatchFlow({
   userGender,
   isVip,
   isAdmin,
-  initialSavedUsers,
 }: MatchFlowProps) {
   const supabase = useMemo(() => createClient(), []);
   const { isVip: viewerIsVip, isAdmin: viewerIsAdmin } = useUserProfileRoles({
@@ -142,7 +139,6 @@ export function MatchFlow({
         userId={userId}
         activeStateCode={stateCode}
         activeStateOnlineCount={onlineUsers.length}
-        initialSavedUsers={initialSavedUsers}
         isOpen={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
         isVip={viewerIsVip}

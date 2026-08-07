@@ -175,17 +175,6 @@ export async function acceptConnectionWithAdmin(
       .from("match_queue")
       .delete()
       .in("user_id", [request.requester_id, request.target_id]);
-
-    await admin.rpc("save_vip_contact", {
-      p_user_id: request.requester_id,
-      p_partner_id: request.target_id,
-      p_state_code: request.state_code,
-    });
-    await admin.rpc("save_vip_contact", {
-      p_user_id: request.target_id,
-      p_partner_id: request.requester_id,
-      p_state_code: request.state_code,
-    });
   }
 
   const { error: updateError } = await admin

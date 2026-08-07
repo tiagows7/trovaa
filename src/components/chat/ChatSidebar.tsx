@@ -6,41 +6,31 @@ import { usePathname, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { getStatesByRegion } from "@/lib/brazil-states";
 import {
-  canStartConversationWith,
   fetchPrimaryActiveConversationId,
-  formatConversationError,
-  NON_VIP_SINGLE_CHAT_MESSAGE,
   navigateToConversation,
 } from "@/lib/conversations";
 import { VIP_PRICE_LABEL } from "@/lib/vip-plan";
-import type { SavedUserEntry } from "@/lib/saved-users";
-import { fetchSavedUsers } from "@/lib/saved-users";
 import {
-  getSavedContactOnlineState,
   getStateLobbyDisplayCount,
-  isSavedContactOnline,
   usePlatformPresence,
 } from "@/contexts/PlatformPresenceContext";
 import { useOptionalConversationTabs } from "@/contexts/ConversationTabsContext";
+import { SignOutButton } from "@/components/SignOutButton";
 
 type ChatSidebarProps = {
   userId: string;
   activeStateCode?: string;
   activeStateOnlineCount?: number;
-  initialSavedUsers: SavedUserEntry[];
   isOpen: boolean;
   onClose: () => void;
   isVip?: boolean;
   isAdmin?: boolean;
 };
 
-type SidebarView = "saved" | "all";
-
 export function ChatSidebar({
   userId,
   activeStateCode = "",
   activeStateOnlineCount,
-  initialSavedUsers,
   isOpen,
   onClose,
   isVip = false,
@@ -49,19 +39,12 @@ export function ChatSidebar({
   const pathname = usePathname();
   const router = useRouter();
   const supabase = useMemo(() => createClient(), []);
-  const [view, setView] = useState<SidebarView>(
-    isVip && initialSavedUsers.length > 0 ? "saved" : "all"
-  );
-  const [savedUsers, setSavedUsers] = useState<SavedUserEntry[]>(
-    isVip ? initialSavedUsers : []
-  );
-  const [startingChatId, setStartingChatId] = useState<string | null>(null);
   const [activeConversationId, setActiveConversationId] = useState<string | null>(
     null
   );
 
   const statesByRegion = useMemo(() => getStatesByRegion(), []);
-  const { onlineUsers, countsByState } = usePlatformPresence();
+  const { countsByState } = usePlatformPresence();
   const conversationTabs = useOptionalConversationTabs();
 
   async function goToConversation(conversationId: string) {
@@ -76,25 +59,6 @@ export function ChatSidebar({
     onClose();
     navigateToConversation(conversationId, router);
   }
-
-  useEffect(() => {
-    if (!isVip || !userId) {
-      setSavedUsers([]);
-      return;
-    }
-
-    let active = true;
-
-    void fetchSavedUsers(supabase, userId).then((users) => {
-      if (active) {
-        setSavedUsers(users);
-      }
-    });
-
-    return () => {
-      active = false;
-    };
-  }, [isOpen, isVip, userId, supabase]);
 
   useEffect(() => {
     if (isVip || !userId) {
@@ -114,61 +78,6 @@ export function ChatSidebar({
       active = false;
     };
   }, [isVip, userId, supabase]);
-
-  async function startChatWithSaved(entry: SavedUserEntry) {
-    const stateCode = entry.lastStateCode ?? activeStateCode;
-    if (!stateCode) return;
-
-    setStartingChatId(entry.savedUserId);
-
-    const access = await canStartConversationWith(
-      supabase,
-      userId,
-      entry.savedUserId,
-      isVip
-    );
-
-    if (!access.allowed) {
-      alert(NON_VIP_SINGLE_CHAT_MESSAGE);
-      setStartingChatId(null);
-      return;
-    }
-
-    if (access.existingConversationId) {
-      await goToConversation(access.existingConversationId);
-      setStartingChatId(null);
-      return;
-    }
-
-    const { data: conversationId, error } = await supabase.rpc("start_conversation_with", {
-      p_partner_id: entry.savedUserId,
-      p_state_code: stateCode,
-    });
-
-    if (error) {
-      alert(formatConversationError(error.message));
-      setStartingChatId(null);
-      return;
-    }
-
-    onClose();
-    await goToConversation(conversationId);
-    setStartingChatId(null);
-  }
-
-  async function removeSavedUser(savedUserId: string) {
-    const { error } = await supabase
-      .from("saved_users")
-      .delete()
-      .eq("user_id", userId)
-      .eq("saved_user_id", savedUserId);
-
-    if (!error) {
-      setSavedUsers((current) =>
-        current.filter((entry) => entry.savedUserId !== savedUserId)
-      );
-    }
-  }
 
   function renderStateCountBadge(stateCode: string, isActive: boolean) {
     const connectedCount = getStateLobbyDisplayCount({
@@ -220,62 +129,6 @@ export function ChatSidebar({
     );
   }
 
-  function renderSavedUser(entry: SavedUserEntry) {
-    const isLoading = startingChatId === entry.savedUserId;
-    const isOnline = isSavedContactOnline(onlineUsers, entry.savedUserId);
-    const onlineStateCode = getSavedContactOnlineState(onlineUsers, entry.savedUserId);
-
-    return (
-      <div
-        key={entry.savedUserId}
-        className="group flex items-center gap-1 rounded-xl transition hover:bg-amber-50 dark:hover:bg-amber-950/30"
-      >
-        <button
-          type="button"
-          disabled={Boolean(startingChatId)}
-          onClick={() => startChatWithSaved(entry)}
-          className="flex min-w-0 flex-1 items-center gap-2 px-3 py-2 text-left text-sm disabled:opacity-60"
-        >
-          <span className="relative flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-amber-100 text-xs font-bold text-amber-700 dark:bg-amber-950 dark:text-amber-300">
-            {entry.username.charAt(0).toUpperCase()}
-            {isOnline && (
-              <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-white bg-emerald-500 dark:border-slate-950" />
-            )}
-          </span>
-          <span className="min-w-0 flex-1">
-            <span className="block truncate font-medium text-slate-900 dark:text-white">
-              {entry.username}
-            </span>
-            {isOnline ? (
-              <span className="flex items-center gap-1 text-xs text-emerald-600 dark:text-emerald-400">
-                <span className="inline-flex h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                Online agora
-                {onlineStateCode ? ` · ${onlineStateCode}` : ""}
-              </span>
-            ) : entry.lastStateCode ? (
-              <span className="text-xs text-slate-400">
-                Última sala: {entry.lastStateCode}
-              </span>
-            ) : (
-              <span className="text-xs text-slate-400">Offline</span>
-            )}
-          </span>
-          <span className="shrink-0 text-xs text-violet-500">
-            {isLoading ? "..." : "→"}
-          </span>
-        </button>
-        <button
-          type="button"
-          onClick={() => removeSavedUser(entry.savedUserId)}
-          aria-label={`Excluir ${entry.username} da lista`}
-          className="mr-2 shrink-0 rounded-lg border border-slate-200 px-2 py-1 text-[11px] font-semibold text-slate-500 transition hover:border-red-200 hover:bg-red-50 hover:text-red-600 dark:border-slate-700 dark:hover:border-red-900 dark:hover:bg-red-950/30 dark:hover:text-red-300"
-        >
-          Excluir
-        </button>
-      </div>
-    );
-  }
-
   const sidebarContent = (
     <>
       <div className="border-b border-slate-200 p-4 dark:border-slate-800">
@@ -313,59 +166,21 @@ export function ChatSidebar({
             </Link>
           </div>
         )}
-
-        {isVip ? (
-          <div className="mt-4 flex rounded-xl bg-slate-100 p-1 dark:bg-slate-800">
-            <button
-              type="button"
-              onClick={() => setView("saved")}
-              className={`flex-1 rounded-lg px-3 py-2 text-xs font-semibold transition ${
-                view === "saved"
-                  ? "bg-white text-violet-700 shadow-sm dark:bg-slate-900 dark:text-violet-300"
-                  : "text-slate-500 dark:text-slate-400"
-              }`}
-            >
-              Salvos ({savedUsers.length})
-            </button>
-            <button
-              type="button"
-              onClick={() => setView("all")}
-              className={`flex-1 rounded-lg px-3 py-2 text-xs font-semibold transition ${
-                view === "all"
-                  ? "bg-white text-violet-700 shadow-sm dark:bg-slate-900 dark:text-violet-300"
-                  : "text-slate-500 dark:text-slate-400"
-              }`}
-            >
-              Estados
-            </button>
-          </div>
-        ) : null}
       </div>
 
       <div className="flex-1 overflow-y-auto p-3">
-        {view === "saved" && isVip ? (
-          savedUsers.length === 0 ? (
-            <p className="px-2 py-4 text-center text-sm text-slate-500 dark:text-slate-400">
-              Nenhum contato salvo ainda. Ao conversar com alguém, a pessoa aparece
-              automaticamente aqui para você falar de novo.
-            </p>
-          ) : (
-            <div className="space-y-1">{savedUsers.map(renderSavedUser)}</div>
-          )
-        ) : (
-          <div className="space-y-5">
-            {Object.entries(statesByRegion).map(([region, states]) => (
-              <div key={region}>
-                <p className="mb-2 px-2 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
-                  {region}
-                </p>
-                <div className="space-y-1">
-                  {states.map((state) => renderStateLink(state.code, state.name))}
-                </div>
+        <div className="space-y-5">
+          {Object.entries(statesByRegion).map(([region, states]) => (
+            <div key={region}>
+              <p className="mb-2 px-2 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+                {region}
+              </p>
+              <div className="space-y-1">
+                {states.map((state) => renderStateLink(state.code, state.name))}
               </div>
-            ))}
-          </div>
-        )}
+            </div>
+          ))}
+        </div>
       </div>
 
       <div className="border-t border-slate-200 p-3 dark:border-slate-800">
@@ -395,10 +210,14 @@ export function ChatSidebar({
         <Link
           href="/"
           onClick={onClose}
-          className="flex items-center justify-center rounded-xl px-3 py-2 text-sm text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800"
+          className="mb-2 flex items-center justify-center rounded-xl px-3 py-2 text-sm text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800"
         >
           Página inicial
         </Link>
+        <SignOutButton
+          onBeforeSignOut={onClose}
+          className="flex w-full items-center justify-center rounded-xl border border-red-200 px-3 py-2 text-sm font-medium text-red-600 transition hover:bg-red-50 dark:border-red-900/50 dark:text-red-400 dark:hover:bg-red-950/30"
+        />
       </div>
     </>
   );

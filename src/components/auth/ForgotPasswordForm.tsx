@@ -112,7 +112,7 @@ export function ForgotPasswordForm() {
           placeholder="seu@email.com"
           autoComplete="email"
           required
-          className="rounded-xl border border-zinc-400 bg-white px-4 py-3 text-zinc-900 outline-none ring-violet-500 focus:ring-2 dark:border-slate-500 dark:bg-slate-900 dark:text-white"
+          className="auth-form-input rounded-xl border border-zinc-400 px-4 py-3 outline-none ring-violet-500 focus:ring-2 dark:border-slate-500"
         />
       </label>
 

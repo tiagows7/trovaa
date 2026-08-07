@@ -2,9 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { getStateByCode } from "@/lib/brazil-states";
 import { getDisplayName } from "@/lib/anonymous-names";
 import { loadUserProfileRoles, loadUserVipStatus } from "@/lib/admin";
-import { fetchSavedUsers, isUserSaved } from "@/lib/saved-users";
 import type { ConversationMessage } from "@/types/database";
-import type { SavedUserEntry } from "@/lib/saved-users";
 import type { ConversationTab } from "@/contexts/ConversationTabsContext";
 
 export type ConversationPanelData = {
@@ -14,9 +12,7 @@ export type ConversationPanelData = {
   isVip: boolean;
   isAdmin: boolean;
   partnerIsVip: boolean;
-  partnerSaved: boolean;
   initialMessages: ConversationMessage[];
-  initialSavedUsers: SavedUserEntry[];
 };
 
 export async function loadConversationTabMeta(
@@ -107,8 +103,7 @@ export async function loadConversationPanelData(
 
   if (!tab) return null;
 
-  const [{ data: myProfile }, { data: messages }, partnerIsVip, savedUsers, partnerSaved] =
-    await Promise.all([
+  const [{ data: myProfile }, { data: messages }, partnerIsVip] = await Promise.all([
       supabase.from("profiles").select("username").eq("id", user.id).maybeSingle(),
       supabase
         .from("conversation_messages")
@@ -117,10 +112,6 @@ export async function loadConversationPanelData(
         .order("created_at", { ascending: true })
         .limit(200),
       loadUserVipStatus(supabase, tab.partnerId),
-      roles.isVip ? fetchSavedUsers(supabase, user.id) : Promise.resolve([]),
-      roles.isVip
-        ? isUserSaved(supabase, user.id, tab.partnerId)
-        : Promise.resolve(false),
     ]);
 
   return {
@@ -130,8 +121,6 @@ export async function loadConversationPanelData(
     isVip: roles.isVip,
     isAdmin: roles.isAdmin,
     partnerIsVip,
-    partnerSaved,
     initialMessages: (messages ?? []) as ConversationMessage[],
-    initialSavedUsers: savedUsers,
   };
 }

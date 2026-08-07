@@ -2,7 +2,6 @@ import { redirect, notFound } from "next/navigation";
 import { MatchFlow } from "@/components/chat/MatchFlow";
 import { createClient } from "@/lib/supabase/server";
 import { getStateByCode } from "@/lib/brazil-states";
-import { fetchSavedUsers } from "@/lib/saved-users";
 import { loadUserProfileRoles } from "@/lib/admin";
 import type { ProfileGender } from "@/types/database";
 
@@ -35,8 +34,6 @@ export default async function ChatStatePage({ params }: ChatStatePageProps) {
     loadUserProfileRoles(supabase, user.id),
   ]);
 
-  const savedUsers = roles.isVip ? await fetchSavedUsers(supabase, user.id) : [];
-
   return (
     <MatchFlow
       userId={user.id}
@@ -45,7 +42,6 @@ export default async function ChatStatePage({ params }: ChatStatePageProps) {
       userGender={(profile?.gender as ProfileGender | null) ?? null}
       isVip={roles.isVip}
       isAdmin={roles.isAdmin}
-      initialSavedUsers={savedUsers}
     />
   );
 }

@@ -6,7 +6,6 @@ import { usePathname, useRouter } from "next/navigation";
 import { AdminNavLink } from "@/components/admin/AdminNavLink";
 import { ConversationTabIcon } from "@/components/chat/ConversationTabIcon";
 import { Logo } from "@/components/Logo";
-import { SignOutButton } from "@/components/SignOutButton";
 import { useConversationTabs } from "@/contexts/ConversationTabsContext";
 import { useConversationUnread } from "@/contexts/ConversationUnreadContext";
 import { loadUserProfileRoles } from "@/lib/admin";
@@ -160,7 +159,6 @@ export function ConversationWorkspaceHeader() {
               VIP — {VIP_PRICE_LABEL}/mês
             </Link>
           )}
-          <SignOutButton />
         </div>
       </div>
     </header>

@@ -122,9 +122,8 @@ export default async function VipPage({ searchParams }: VipPageProps) {
 
           <p className="mx-auto mt-4 max-w-xl text-slate-600 dark:text-slate-300">
 
-            Desbloqueie conversas salvas, veja quem está online de verdade e converse
-
-            com mais controle. Pagamento seguro via Stripe.
+            Veja quem está online de verdade e converse com mais controle.
+            Pagamento seguro via Stripe.
 
           </p>
 

@@ -6,7 +6,6 @@ import { Logo } from "@/components/Logo";
 import { ChatSidebar } from "@/components/chat/ChatSidebar";
 import type { RealtimePostgresInsertPayload } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/client";
-import { SignOutButton } from "@/components/SignOutButton";
 import { VipBadge } from "@/components/VipBadge";
 import { isProfileVip } from "@/lib/vip";
 import type { Message } from "@/types/database";
@@ -114,8 +113,6 @@ export function ChatRoom({
     <div className="flex h-dvh bg-zinc-50 dark:bg-slate-950">
       <ChatSidebar
         userId={userId}
-        activeStateCode={stateCode}
-        initialSavedUsers={[]}
         isOpen={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
       />
@@ -154,7 +151,6 @@ export function ChatRoom({
               {username}
               {isVip && <VipBadge />}
             </span>
-            <SignOutButton />
           </div>
         </header>
 

@@ -74,7 +74,8 @@ textarea::placeholder {
   box-shadow: 0 0 0 1000px #ffffff inset !important;
 }
 
-.profile-form-input {
+.profile-form-input,
+.auth-form-input {
   color: #171717 !important;
   -webkit-text-fill-color: #171717 !important;
   caret-color: #171717 !important;
@@ -82,11 +83,13 @@ textarea::placeholder {
   border-color: #94a3b8 !important;
 }
 
-.dark .profile-form-input {
+.dark .profile-form-input,
+.dark .auth-form-input {
   border-color: #64748b !important;
 }
 
-.profile-form-input::placeholder {
+.profile-form-input::placeholder,
+.auth-form-input::placeholder {
   color: #94a3b8 !important;
   -webkit-text-fill-color: #94a3b8 !important;
   opacity: 1;
@@ -94,7 +97,10 @@ textarea::placeholder {
 
 .profile-form-input:-webkit-autofill,
 .profile-form-input:-webkit-autofill:hover,
-.profile-form-input:-webkit-autofill:focus {
+.profile-form-input:-webkit-autofill:focus,
+.auth-form-input:-webkit-autofill,
+.auth-form-input:-webkit-autofill:hover,
+.auth-form-input:-webkit-autofill:focus {
   -webkit-text-fill-color: #171717 !important;
   box-shadow: 0 0 0 1000px #ffffff inset !important;
 }

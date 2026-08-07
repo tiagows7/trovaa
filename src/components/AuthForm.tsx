@@ -125,7 +125,7 @@ export function AuthForm({ mode }: AuthFormProps) {
             placeholder="Como você quer aparecer no chat"
             autoComplete="username"
             suppressHydrationWarning
-            className="rounded-xl border border-zinc-400 dark:border-slate-500 bg-white px-4 py-3 text-zinc-900 outline-none ring-violet-500 focus:ring-2"
+            className="auth-form-input rounded-xl border border-zinc-400 px-4 py-3 outline-none ring-violet-500 focus:ring-2 dark:border-slate-500"
             required
           />
         </label>
@@ -143,7 +143,7 @@ export function AuthForm({ mode }: AuthFormProps) {
               min={getMinBirthDate()}
               max={getMaxBirthDate()}
               required
-              className="rounded-xl border border-zinc-400 dark:border-slate-500 bg-white px-4 py-3 text-zinc-900 outline-none ring-violet-500 focus:ring-2"
+              className="auth-form-input rounded-xl border border-zinc-400 px-4 py-3 outline-none ring-violet-500 focus:ring-2 dark:border-slate-500"
             />
           </label>
 
@@ -184,7 +184,7 @@ export function AuthForm({ mode }: AuthFormProps) {
           placeholder="seu@email.com"
           autoComplete="email"
           suppressHydrationWarning
-          className="rounded-xl border border-zinc-400 dark:border-slate-500 bg-white px-4 py-3 text-zinc-900 outline-none ring-violet-500 focus:ring-2"
+          className="auth-form-input rounded-xl border border-zinc-400 px-4 py-3 outline-none ring-violet-500 focus:ring-2 dark:border-slate-500"
           required
         />
       </label>
@@ -198,7 +198,7 @@ export function AuthForm({ mode }: AuthFormProps) {
           minLength={6}
           autoComplete={mode === "signup" ? "new-password" : "current-password"}
           suppressHydrationWarning
-          className="rounded-xl border border-zinc-400 dark:border-slate-500 bg-white px-4 py-3 text-zinc-900 outline-none ring-violet-500 focus:ring-2"
+          className="auth-form-input rounded-xl border border-zinc-400 px-4 py-3 outline-none ring-violet-500 focus:ring-2 dark:border-slate-500"
           required
         />
         {mode === "login" && (

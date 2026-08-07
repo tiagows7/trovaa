@@ -7,11 +7,9 @@ import { Logo } from "@/components/Logo";
 import { ChatSidebar } from "@/components/chat/ChatSidebar";
 import type { RealtimePostgresInsertPayload } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/client";
-import { SignOutButton } from "@/components/SignOutButton";
 import { VipBadge } from "@/components/VipBadge";
 import { useUserProfileRoles } from "@/hooks/useUserProfileRoles";
 import type { ConversationMessage } from "@/types/database";
-import type { SavedUserEntry } from "@/lib/saved-users";
 
 type PrivateChatRoomProps = {
   embedded?: boolean;
@@ -24,9 +22,7 @@ type PrivateChatRoomProps = {
   partnerId: string;
   partnerName: string;
   partnerIsVip: boolean;
-  partnerSaved: boolean;
   initialMessages: ConversationMessage[];
-  initialSavedUsers: SavedUserEntry[];
   isAdmin: boolean;
 };
 
@@ -48,9 +44,7 @@ export function PrivateChatRoom({
   partnerId,
   partnerName,
   partnerIsVip,
-  partnerSaved,
   initialMessages,
-  initialSavedUsers,
   isAdmin,
 }: PrivateChatRoomProps) {
   const supabase = useMemo(() => createClient(), []);
@@ -132,7 +126,6 @@ export function PrivateChatRoom({
       <ChatSidebar
         userId={userId}
         activeStateCode={stateCode}
-        initialSavedUsers={initialSavedUsers}
         isOpen={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
         isVip={viewerIsVip}
@@ -164,11 +157,6 @@ export function PrivateChatRoom({
                 <p className="flex items-center gap-2 text-sm font-medium text-slate-900 dark:text-white">
                   {partnerName}
                   {partnerIsVip && <VipBadge />}
-                  {viewerIsVip && partnerSaved && (
-                    <span className="rounded-md bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-700 dark:bg-amber-950 dark:text-amber-300">
-                      Na sua lista
-                    </span>
-                  )}
                 </p>
                 <p className="text-xs text-slate-400">
                   Conversa privada · {stateName} ({stateCode})
@@ -206,7 +194,6 @@ export function PrivateChatRoom({
                 {username}
                 {viewerIsVip && <VipBadge />}
               </span>
-              <SignOutButton />
             </div>
           </header>
         )}

@@ -75,9 +75,7 @@ export function ConversationPanel({ conversationId, isActive }: ConversationPane
       partnerId={data.tab.partnerId}
       partnerName={data.tab.partnerName}
       partnerIsVip={data.partnerIsVip}
-      partnerSaved={data.partnerSaved}
       initialMessages={data.initialMessages}
-      initialSavedUsers={data.initialSavedUsers}
       isAdmin={data.isAdmin}
     />
     </div>
