@@ -4,7 +4,7 @@ import {
   applyStateChannelTrack,
   readStateChannelUsers,
   type StatePresenceTrack,
-} from "@/hooks/useStateChannelTracker";
+} from "@/lib/state-presence-utils";
 
 type Entry = {
   channel: RealtimeChannel;
@@ -13,6 +13,7 @@ type Entry = {
   subscribed: boolean;
   refCount: number;
   syncListeners: Set<() => void>;
+  ready: Promise<void>;
 };
 
 const entries = new Map<string, Entry>();
@@ -25,6 +26,22 @@ function notifyEntry(entry: Entry) {
   for (const listener of entry.syncListeners) {
     listener();
   }
+}
+
+function waitForSubscribe(entry: Entry, timeoutMs = 20000) {
+  if (entry.subscribed) {
+    return Promise.resolve();
+  }
+
+  return Promise.race([
+    entry.ready,
+    new Promise<void>((_, reject) => {
+      window.setTimeout(
+        () => reject(new Error("Presence subscribe timeout")),
+        timeoutMs
+      );
+    }),
+  ]);
 }
 
 export function isStatePresenceSubscribed(stateCode: string, userId: string) {
@@ -43,13 +60,14 @@ export function readManagedStateUsers(stateCode: string, userId: string) {
 export async function trackManagedStatePresence(
   stateCode: string,
   userId: string,
-  track: StatePresenceTrack & { stateCode: string }
+  track: StatePresenceTrack
 ) {
   const entry = entries.get(entryKey(stateCode, userId));
-  if (!entry?.subscribed) {
+  if (!entry) {
     return false;
   }
 
+  await waitForSubscribe(entry);
   await applyStateChannelTrack(entry.channel, track);
   notifyEntry(entry);
   return true;
@@ -75,6 +93,14 @@ export async function acquireStatePresenceChannel(
       config: { presence: { key: userId } },
     });
 
+    let resolveReady!: () => void;
+    let rejectReady!: (error: Error) => void;
+
+    const ready = new Promise<void>((resolve, reject) => {
+      resolveReady = resolve;
+      rejectReady = reject;
+    });
+
     entry = {
       channel,
       stateCode: normalizedState,
@@ -82,6 +108,7 @@ export async function acquireStatePresenceChannel(
       subscribed: false,
       refCount: 0,
       syncListeners: new Set(),
+      ready,
     };
     entries.set(key, entry);
 
@@ -94,18 +121,22 @@ export async function acquireStatePresenceChannel(
     channel.subscribe((status: string) => {
       if (status === "SUBSCRIBED") {
         entry!.subscribed = true;
+        resolveReady();
         notifyEntry(entry!);
         return;
       }
 
       if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
         entry!.subscribed = false;
+        rejectReady(new Error(`Presence channel ${status}`));
       }
     });
   }
 
   entry.refCount += 1;
   entry.syncListeners.add(onSync);
+
+  await waitForSubscribe(entry);
 
   return () => {
     const current = entries.get(key);

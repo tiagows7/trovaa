@@ -65,7 +65,12 @@ export function useStatePresence(
     if (!userId || !normalizedState) return;
 
     const next = readManagedStateUsers(normalizedState, userId);
-    setOnlineUsers(next);
+    setOnlineUsers((current) => {
+      if (next.length === 0 && current.length > 0) {
+        return current;
+      }
+      return next;
+    });
   }, [normalizedState, userId]);
 
   useEffect(() => {
@@ -94,44 +99,60 @@ export function useStatePresence(
     let retryTimer: number | null = null;
     let releaseChannel: (() => void) | null = null;
 
+    async function syncTrack() {
+      if (!active) return false;
+
+      const tracked = await trackManagedStatePresence(
+        normalizedState,
+        userId,
+        trackRef.current
+      );
+
+      if (tracked) {
+        refreshOnlineUsers();
+      }
+
+      return tracked;
+    }
+
     async function connect() {
       if (!active) return;
 
       setPresenceStatus("connecting");
 
       try {
-        releaseChannel?.();
-        releaseChannel = await acquireStatePresenceChannel(
-          supabase,
-          normalizedState,
-          userId,
-          refreshOnlineUsers
-        );
+        if (!releaseChannel) {
+          releaseChannel = await acquireStatePresenceChannel(
+            supabase,
+            normalizedState,
+            userId,
+            refreshOnlineUsers
+          );
+        }
 
-        if (!active) {
-          releaseChannel();
-          releaseChannel = null;
-          return;
+        if (!active) return;
+
+        const tracked = await syncTrack();
+        if (!tracked) {
+          throw new Error("Presence track failed");
         }
 
         setPresenceStatus("connected");
-        await trackManagedStatePresence(normalizedState, userId, trackRef.current);
-        refreshOnlineUsers();
 
-        for (const delay of [250, 750, 1500, 3000]) {
+        for (const delay of [250, 750, 1500, 3000, 6000]) {
           window.setTimeout(() => {
             if (active) {
-              void trackManagedStatePresence(
-                normalizedState,
-                userId,
-                trackRef.current
-              ).then(() => refreshOnlineUsers());
+              void syncTrack();
             }
           }, delay);
         }
       } catch {
         if (!active) return;
+
+        releaseChannel?.();
+        releaseChannel = null;
         setPresenceStatus("error");
+
         retryTimer = window.setTimeout(() => {
           if (active) {
             void connect();
@@ -143,11 +164,7 @@ export function useStatePresence(
     void connect();
 
     const interval = window.setInterval(() => {
-      void trackManagedStatePresence(
-        normalizedState,
-        userId,
-        trackRef.current
-      ).then(() => refreshOnlineUsers());
+      void syncTrack();
     }, 5000);
 
     return () => {

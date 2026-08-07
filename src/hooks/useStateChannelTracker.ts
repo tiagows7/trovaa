@@ -1,44 +1,22 @@
 "use client";
 
 import { useEffect, useMemo, useRef } from "react";
-import type { RealtimeChannel } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/client";
 import {
   acquireStatePresenceChannel,
   trackManagedStatePresence,
 } from "@/lib/state-presence-channel";
+import type { StatePresenceTrack } from "@/lib/state-presence-utils";
 import { useSupabaseRealtimeAuth } from "@/hooks/useSupabaseRealtimeAuth";
-import type { ProfileGender } from "@/types/database";
 
-export type StatePresenceTrack = {
-  userId: string;
-  gender: ProfileGender;
-  lookingFor: ProfileGender | null;
-  inConversation: boolean;
-  isVip: boolean;
-};
-
-type TrackOptions = StatePresenceTrack & {
-  stateCode: string;
-};
-
-export async function applyStateChannelTrack(
-  channel: RealtimeChannel,
-  track: TrackOptions
-) {
-  const normalizedState = track.stateCode.toUpperCase();
-  await channel.track({
-    user_id: track.userId,
-    gender: track.gender,
-    looking_for: track.lookingFor,
-    state_code: normalizedState,
-    in_conversation: track.inConversation,
-    is_vip: track.isVip,
-  });
-}
+export type { StatePresenceTrack } from "@/lib/state-presence-utils";
+export {
+  applyStateChannelTrack,
+  readStateChannelUsers,
+} from "@/lib/state-presence-utils";
 
 export function useStateChannelTracker(
-  track: TrackOptions | null,
+  track: StatePresenceTrack | null,
   options?: { onSync?: () => void }
 ) {
   const supabase = useMemo(() => createClient(), []);
@@ -61,44 +39,46 @@ export function useStateChannelTracker(
       onSyncRef.current?.();
     };
 
-    async function connect(current: TrackOptions) {
+    async function syncTrack() {
+      if (!active || !trackRef.current) return;
+      await trackManagedStatePresence(
+        trackRef.current.stateCode,
+        trackRef.current.userId,
+        trackRef.current
+      );
+      notify();
+    }
+
+    async function connect(current: StatePresenceTrack) {
       if (!active || !trackRef.current) return;
 
       try {
-        releaseChannel?.();
-        releaseChannel = await acquireStatePresenceChannel(
-          supabase,
-          current.stateCode,
-          current.userId,
-          notify
-        );
-
-        if (!active || !trackRef.current) {
-          releaseChannel();
-          releaseChannel = null;
-          return;
+        if (!releaseChannel) {
+          releaseChannel = await acquireStatePresenceChannel(
+            supabase,
+            current.stateCode,
+            current.userId,
+            notify
+          );
         }
 
-        await trackManagedStatePresence(
-          current.stateCode,
-          current.userId,
-          trackRef.current
-        );
-        notify();
+        if (!active || !trackRef.current) return;
 
-        for (const delay of [250, 750, 1500]) {
+        await syncTrack();
+
+        for (const delay of [250, 750, 1500, 3000]) {
           window.setTimeout(() => {
-            if (active && trackRef.current) {
-              void trackManagedStatePresence(
-                trackRef.current.stateCode,
-                trackRef.current.userId,
-                trackRef.current
-              ).then(() => notify());
+            if (active) {
+              void syncTrack();
             }
           }, delay);
         }
       } catch {
         if (!active) return;
+
+        releaseChannel?.();
+        releaseChannel = null;
+
         retryTimer = window.setTimeout(() => {
           if (active && trackRef.current) {
             void connect(trackRef.current);
@@ -110,13 +90,7 @@ export function useStateChannelTracker(
     void connect(track);
 
     const interval = window.setInterval(() => {
-      if (!trackRef.current) return;
-
-      void trackManagedStatePresence(
-        trackRef.current.stateCode,
-        trackRef.current.userId,
-        trackRef.current
-      ).then(() => notify());
+      void syncTrack();
     }, 5000);
 
     return () => {
@@ -160,53 +134,4 @@ export function useStateChannelTracker(
     track?.stateCode,
     track?.userId,
   ]);
-}
-
-export function readStateChannelUsers(
-  channel: RealtimeChannel,
-  viewerUserId: string
-) {
-  type PresencePayload = {
-    user_id?: string;
-    gender?: ProfileGender;
-    looking_for?: ProfileGender | null;
-    in_conversation?: boolean;
-    is_vip?: boolean;
-  };
-
-  const state = channel.presenceState<PresencePayload>();
-  const byId = new Map<
-    string,
-    {
-      userId: string;
-      gender: ProfileGender;
-      lookingFor: ProfileGender | null;
-      inConversation: boolean;
-      isVip: boolean;
-    }
-  >();
-
-  for (const presences of Object.values(state)) {
-    for (const presence of presences) {
-      if (
-        presence.user_id &&
-        presence.gender &&
-        presence.user_id !== viewerUserId
-      ) {
-        const inConversation = presence.in_conversation ?? false;
-        const isVip = presence.is_vip ?? false;
-        const existing = byId.get(presence.user_id);
-
-        byId.set(presence.user_id, {
-          userId: presence.user_id,
-          gender: presence.gender,
-          lookingFor: presence.looking_for ?? existing?.lookingFor ?? null,
-          inConversation: existing?.inConversation || inConversation,
-          isVip: existing?.isVip || isVip,
-        });
-      }
-    }
-  }
-
-  return [...byId.values()];
 }
