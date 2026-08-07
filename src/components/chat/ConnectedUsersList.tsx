@@ -22,6 +22,7 @@ type ConnectedUsersListProps = {
   preferredGender: ProfileGender;
   viewerLookingFor?: ProfileGender | null;
   viewerIsVip: boolean;
+  presenceStatus?: "idle" | "connecting" | "connected" | "error";
   pendingPartnerId?: string | null;
   blockOtherConnections?: boolean;
   loadingTargetId: string | null;
@@ -52,6 +53,7 @@ export function ConnectedUsersList({
   preferredGender,
   viewerLookingFor = null,
   viewerIsVip,
+  presenceStatus = "idle",
   pendingPartnerId = null,
   blockOtherConnections = false,
   loadingTargetId,
@@ -150,6 +152,24 @@ export function ConnectedUsersList({
           : "Nomes fictícios por privacidade. Você pode conversar com várias pessoas — VIP mostra os nomes reais."}
       </p>
 
+      {presenceStatus === "connecting" && (
+        <p className="mt-3 text-sm text-slate-500 dark:text-slate-400">
+          Conectando à sala…
+        </p>
+      )}
+      {presenceStatus === "error" && (
+        <p className="mt-3 text-sm text-amber-600 dark:text-amber-400">
+          Reconectando… a lista atualiza automaticamente.
+        </p>
+      )}
+      {presenceStatus === "connected" && visibleUsers.length > 0 && (
+        <p className="mt-3 text-sm font-medium text-emerald-600 dark:text-emerald-400">
+          {visibleUsers.length}{" "}
+          {visibleUsers.length === 1 ? "pessoa conectada" : "pessoas conectadas"}{" "}
+          · novos usuários aparecem aqui automaticamente
+        </p>
+      )}
+
       {!viewerIsVip && (
         <p className="mt-3 rounded-xl border border-violet-200 bg-violet-50 px-4 py-3 text-sm text-violet-800 dark:border-violet-900/50 dark:bg-violet-950/30 dark:text-violet-200">
           Quem já está em conversa sem VIP não pode receber novos convites. VIPs
@@ -181,15 +201,14 @@ export function ConnectedUsersList({
         {visibleUsers.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-slate-200 px-6 py-10 text-center dark:border-slate-700">
             <p className="text-sm text-slate-500 dark:text-slate-400">
-              Ninguém deste perfil conectado agora neste estado.
+              {presenceStatus === "connecting"
+                ? "Conectando à sala…"
+                : "Ninguém deste perfil conectado ainda."}
             </p>
             <p className="mt-2 text-xs text-slate-400">
-              {users.length === 0
-                ? "Nenhuma outra pessoa online nesta sala. Quem está em conversa também aparece aqui quando conectado."
-                : `Há ${users.length} pessoa(s) online neste estado, mas nenhuma com o perfil selecionado.`}
-            </p>
-            <p className="mt-2 text-xs text-slate-400">
-              Aguarde alguns segundos ou volte e escolha outro filtro.
+              {presenceStatus === "connected"
+                ? "Aguarde — quando alguém entrar na sala, aparecerá aqui automaticamente."
+                : "Assim que a conexão for estabelecida, a lista começa a atualizar."}
             </p>
           </div>
         ) : (

@@ -8,19 +8,9 @@ import { useStatePresence } from "@/hooks/useStatePresence";
 import { useUserProfileRoles } from "@/hooks/useUserProfileRoles";
 import { createClient } from "@/lib/supabase/client";
 import { getPartnerGenderLabel, PARTNER_GENDER_OPTIONS } from "@/lib/matching";
-import {
-  countConnectableUsersByGender,
-  countMatchableUsersByGender,
-  countUsersByGender,
-  countUsersInConversationByGender,
-} from "@/lib/presence-matching";
 import { requestConnection } from "@/lib/connection-requests";
 import { useConnectionRequests } from "@/contexts/ConnectionRequestsContext";
 import { useConversationTabs } from "@/contexts/ConversationTabsContext";
-import {
-  usePlatformPresence,
-  getStateLobbyCount,
-} from "@/contexts/PlatformPresenceContext";
 import { VIP_PRICE_LABEL } from "@/lib/vip-plan";
 import {
   canStartConversationWith,
@@ -72,13 +62,6 @@ export function MatchFlow({
     lookingFor,
     { isVip: viewerIsVip }
   );
-  const { countsByState } = usePlatformPresence();
-  const platformRoomCount = getStateLobbyCount(countsByState, stateCode);
-  const localRoomCount = onlineUsers.length + 1;
-  const isSyncingRoom =
-    presenceStatus === "connected" &&
-    platformRoomCount > localRoomCount &&
-    onlineUsers.length === 0;
   const { outgoingRequest, refreshRequests } = useConnectionRequests();
   const { openConversationById } = useConversationTabs();
 
@@ -178,9 +161,9 @@ export function MatchFlow({
           </button>
           <p className="truncate text-sm font-medium text-slate-700 dark:text-slate-200">
             {stateName} ({stateCode})
-            {presenceStatus === "connected" && (
+            {step === "browse" && presenceStatus === "connected" && (
               <span className="ml-2 text-emerald-600 dark:text-emerald-400">
-                · {onlineUsers.length + 1} online
+                · {onlineUsers.length} conectado(s)
               </span>
             )}
           </p>
@@ -198,59 +181,12 @@ export function MatchFlow({
               <p className="mt-3 text-sm text-slate-600 dark:text-slate-300">
                 Seu perfil:{" "}
                 <strong>{getPartnerGenderLabel(userGender)}</strong>. Escolha com
-                quem quer conversar para ver a lista e enviar pedido de conexão.
-                {presenceStatus === "connected" && (
-                  <span className="mt-1 block text-emerald-600 dark:text-emerald-400">
-                    {localRoomCount} pessoa(s) nesta sala (incluindo você).
-                    {isSyncingRoom && (
-                      <span className="mt-1 block text-slate-500 dark:text-slate-400">
-                        Sincronizando lista de pessoas online… aguarde alguns
-                        segundos.
-                      </span>
-                    )}
-                  </span>
-                )}
-                {presenceStatus === "connecting" && (
-                  <span className="mt-1 block text-slate-500 dark:text-slate-400">
-                    Conectando você à sala…
-                  </span>
-                )}
-                {presenceStatus === "error" && (
-                  <span className="mt-1 block text-amber-600 dark:text-amber-400">
-                    Reconectando à sala… aguarde alguns segundos.
-                  </span>
-                )}
+                quem quer conversar para ver quem está conectado e enviar pedido
+                de conexão.
               </p>
 
               <div className="mt-8 space-y-3">
-                {PARTNER_GENDER_OPTIONS.map((option) => {
-                  const genderOnline = countUsersByGender(onlineUsers, option.value);
-                  const inConversationCount = countUsersInConversationByGender(
-                    onlineUsers,
-                    option.value
-                  );
-                  const matchableCount = userGender
-                    ? countMatchableUsersByGender(
-                        onlineUsers,
-                        userGender,
-                        option.value,
-                        null
-                      )
-                    : 0;
-                  const connectableCount = userGender
-                    ? countConnectableUsersByGender(
-                        onlineUsers,
-                        userGender,
-                        option.value,
-                        null
-                      )
-                    : 0;
-                  const busyInConversationCount = Math.max(
-                    matchableCount - connectableCount,
-                    0
-                  );
-
-                  return (
+                {PARTNER_GENDER_OPTIONS.map((option) => (
                   <button
                     key={option.value}
                     type="button"
@@ -264,52 +200,11 @@ export function MatchFlow({
                       </span>
                       <span className="mt-1 block text-sm text-slate-500 dark:text-slate-400">
                         {option.description}
-                        {genderOnline > 0 && (
-                          <span className="mt-1 block font-medium text-slate-600 dark:text-slate-300">
-                            {genderOnline} pessoa(s) deste perfil na sala agora
-                            {inConversationCount > 0 && (
-                              <span className="text-violet-600 dark:text-violet-300">
-                                {" "}
-                                ({inConversationCount} em conversa)
-                              </span>
-                            )}
-                            {matchableCount > 0 && (
-                              <span className="mt-1 block font-medium text-emerald-600 dark:text-emerald-400">
-                                {matchableCount} compatível(is) online agora
-                                {busyInConversationCount > 0 && (
-                                  <span className="text-violet-600 dark:text-violet-300">
-                                    {" "}
-                                    ({busyInConversationCount} em conversa
-                                    {connectableCount > 0
-                                      ? `, ${connectableCount} disponível(is) para conectar`
-                                      : ", indisponível(is) para convite"})
-                                  </span>
-                                )}
-                                {busyInConversationCount === 0 &&
-                                  connectableCount > 0 && (
-                                    <span>
-                                      {" "}
-                                      — {connectableCount} disponível(is) para
-                                      conectar
-                                    </span>
-                                  )}
-                              </span>
-                            )}
-                            {genderOnline > 0 && matchableCount === 0 && (
-                              <span className="mt-1 block text-amber-600 dark:text-amber-400">
-                                Online, mas com filtro incompatível — peça para
-                                escolherem &quot;{option.label}&quot; ou o perfil
-                                oposto ao de vocês.
-                              </span>
-                            )}
-                          </span>
-                        )}
                       </span>
                     </span>
                     <span className="text-violet-500">→</span>
                   </button>
-                );
-                })}
+                ))}
               </div>
 
               {error && (
@@ -331,6 +226,7 @@ export function MatchFlow({
               preferredGender={selectedGender}
               viewerLookingFor={selectedGender}
               viewerIsVip={viewerIsVip}
+              presenceStatus={presenceStatus}
               pendingPartnerId={outgoingRequest?.targetId ?? null}
               blockOtherConnections={false}
               loadingTargetId={loadingTargetId}
