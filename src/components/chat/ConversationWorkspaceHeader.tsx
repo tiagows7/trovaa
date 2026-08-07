@@ -27,6 +27,7 @@ export function ConversationWorkspaceHeader() {
   } = useConversationTabs();
   const { getUnreadCount, markConversationRead } = useConversationUnread();
   const [isAdmin, setIsAdmin] = useState(false);
+  const [username, setUsername] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -38,10 +39,14 @@ export function ConversationWorkspaceHeader() {
 
       if (!user || !active) return;
 
-      const roles = await loadUserProfileRoles(supabase, user.id);
+      const [{ data: profile }, roles] = await Promise.all([
+        supabase.from("profiles").select("username").eq("id", user.id).maybeSingle(),
+        loadUserProfileRoles(supabase, user.id),
+      ]);
 
       if (!active) return;
 
+      setUsername(profile?.username ?? user.email?.split("@")[0] ?? "Você");
       setIsAdmin(roles.isAdmin);
       setIsVip(roles.isVip);
     }
@@ -136,6 +141,14 @@ export function ConversationWorkspaceHeader() {
         </div>
 
         <div className="flex shrink-0 items-center gap-2">
+          {username && (
+            <span
+              className="max-w-[96px] truncate text-sm font-medium text-slate-700 dark:text-slate-200 sm:max-w-[160px]"
+              title={username}
+            >
+              {username}
+            </span>
+          )}
           {isAdmin && (
             <AdminNavLink className="hidden rounded-lg border border-slate-300 bg-slate-900 px-3 py-1.5 text-sm font-semibold text-white transition hover:bg-slate-800 sm:inline-flex dark:border-slate-600 dark:bg-violet-700 dark:hover:bg-violet-600" />
           )}
