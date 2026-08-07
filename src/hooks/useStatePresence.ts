@@ -3,6 +3,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import { usePlatformPresence } from "@/contexts/PlatformPresenceContext";
+import {
+  applyStateChannelTrack,
+  readStateChannelUsers,
+} from "@/hooks/useStateChannelTracker";
 import { createClient, prepareSupabaseRealtimeAuth } from "@/lib/supabase/client";
 import type { ProfileGender } from "@/types/database";
 
@@ -12,40 +16,6 @@ export type PresenceUser = {
   lookingFor: ProfileGender | null;
   inConversation?: boolean;
 };
-
-type PresencePayload = {
-  user_id?: string;
-  gender?: ProfileGender;
-  looking_for?: ProfileGender | null;
-  in_conversation?: boolean;
-};
-
-function readOnlineUsers(
-  channel: RealtimeChannel,
-  viewerUserId: string
-): PresenceUser[] {
-  const state = channel.presenceState<PresencePayload>();
-  const byId = new Map<string, PresenceUser>();
-
-  for (const presences of Object.values(state)) {
-    for (const presence of presences) {
-      if (
-        presence.user_id &&
-        presence.gender &&
-        presence.user_id !== viewerUserId
-      ) {
-        byId.set(presence.user_id, {
-          userId: presence.user_id,
-          gender: presence.gender,
-          lookingFor: presence.looking_for ?? null,
-          inConversation: presence.in_conversation ?? false,
-        });
-      }
-    }
-  }
-
-  return Array.from(byId.values());
-}
 
 export function useStatePresence(
   stateCode: string,
@@ -70,6 +40,7 @@ export function useStatePresence(
   );
 
   const normalizedState = stateCode.toUpperCase();
+  const inConversation = options?.inConversation ?? false;
 
   useEffect(() => {
     if (!stateCode || !userId || !gender) {
@@ -82,8 +53,10 @@ export function useStatePresence(
 
     function refreshOnlineUsers() {
       if (!channelRef.current || !subscribedRef.current) return;
-      setOnlineUsers(readOnlineUsers(channelRef.current, userId));
+      setOnlineUsers(readStateChannelUsers(channelRef.current, userId));
     }
+
+    const profileGender = gender;
 
     async function connect() {
       setPresenceStatus("connecting");
@@ -112,12 +85,12 @@ export function useStatePresence(
           setPresenceStatus("connected");
 
           try {
-            await channel.track({
-              user_id: userId,
-              gender,
-              looking_for: lookingFor,
-              state_code: normalizedState,
-              in_conversation: options?.inConversation ?? false,
+            await applyStateChannelTrack(channel, {
+              stateCode: normalizedState,
+              userId,
+              gender: profileGender,
+              lookingFor,
+              inConversation,
             });
           } catch {
             setPresenceStatus("error");
@@ -160,9 +133,9 @@ export function useStatePresence(
     };
   }, [
     gender,
+    inConversation,
     lookingFor,
     normalizedState,
-    options?.inConversation,
     ownerKey,
     reportLobbyState,
     stateCode,
@@ -173,25 +146,24 @@ export function useStatePresence(
   useEffect(() => {
     if (!subscribedRef.current || !channelRef.current || !gender) return;
 
-    void channelRef.current
-      .track({
-        user_id: userId,
-        gender,
-        looking_for: lookingFor,
-        state_code: normalizedState,
-        in_conversation: options?.inConversation ?? false,
-      })
+    void applyStateChannelTrack(channelRef.current, {
+      stateCode: normalizedState,
+      userId,
+      gender: profileGender,
+      lookingFor,
+      inConversation,
+    })
       .then(() => {
         if (channelRef.current) {
-          setOnlineUsers(readOnlineUsers(channelRef.current, userId));
+          setOnlineUsers(readStateChannelUsers(channelRef.current, userId));
         }
       })
       .catch(() => undefined);
   }, [
     gender,
+    inConversation,
     lookingFor,
     normalizedState,
-    options?.inConversation,
     userId,
     presenceStatus,
   ]);

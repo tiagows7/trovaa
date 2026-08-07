@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { usePathname } from "next/navigation";
 import { useConversationTabs } from "@/contexts/ConversationTabsContext";
-import { useStatePresenceContext } from "@/contexts/StatePresenceContext";
 import { usePlatformPresence } from "@/contexts/PlatformPresenceContext";
+import { useStateChannelTracker } from "@/hooks/useStateChannelTracker";
 import type { Session } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/client";
 import type { ProfileGender } from "@/types/database";
@@ -14,8 +15,8 @@ type ActiveConversationRef = {
 };
 
 export function ConversationLobbyPresence() {
+  const pathname = usePathname();
   const { tabs } = useConversationTabs();
-  const { updatePresence } = useStatePresenceContext();
   const { reportLobbyState } = usePlatformPresence();
   const supabase = useMemo(() => createClient(), []);
   const [userId, setUserId] = useState("");
@@ -68,15 +69,16 @@ export function ConversationLobbyPresence() {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(
       (_event: string, session: Session | null) => {
-      if (!session?.user) {
-        setUserId("");
-        setGender(null);
-        setActiveConversations([]);
-        return;
-      }
+        if (!session?.user) {
+          setUserId("");
+          setGender(null);
+          setActiveConversations([]);
+          return;
+        }
 
-      void loadProfile();
-    });
+        void loadProfile();
+      }
+    );
 
     const refreshInterval = window.setInterval(() => {
       void loadProfile();
@@ -89,8 +91,8 @@ export function ConversationLobbyPresence() {
     };
   }, [supabase]);
 
-  useEffect(() => {
-    if (!userId || !gender) return;
+  const backgroundConversation = useMemo(() => {
+    if (!userId || !gender) return null;
 
     const tracked = new Map<string, string>();
 
@@ -104,50 +106,48 @@ export function ConversationLobbyPresence() {
       }
     }
 
-    const ownerKeys: string[] = [];
+    const conversaRouteMatch = pathname.match(/^\/conversa\/([^/]+)/);
+    const activeConversaId = conversaRouteMatch?.[1] ?? null;
 
     for (const [conversationId, stateCode] of tracked.entries()) {
-      const normalizedState = stateCode.toUpperCase();
-      if (!normalizedState) continue;
+      if (conversationId === activeConversaId) {
+        continue;
+      }
 
-      const ownerKey = `conversa:${conversationId}`;
-      ownerKeys.push(ownerKey);
-
-      updatePresence(ownerKey, normalizedState, {
-        userId,
-        gender,
-        lookingFor: null,
-        inConversation: true,
-        openToMatch: true,
-      });
-      reportLobbyState(ownerKey, normalizedState);
+      return {
+        conversationId,
+        stateCode,
+        ownerKey: `conversa:${conversationId}`,
+      };
     }
 
-    return () => {
-      for (const ownerKey of ownerKeys) {
-        const conversationId = ownerKey.replace("conversa:", "");
-        const stateCode =
-          tracked.get(conversationId) ??
-          activeConversations.find((c) => c.conversationId === conversationId)
-            ?.stateCode ??
-          tabs.find((t) => t.conversationId === conversationId)?.stateCode;
+    return null;
+  }, [activeConversations, gender, pathname, tabs, userId]);
 
-        updatePresence(
-          ownerKey,
-          stateCode?.toUpperCase() ?? "",
-          null
-        );
-        reportLobbyState(ownerKey, null);
-      }
+  useStateChannelTracker(
+    backgroundConversation && gender
+      ? {
+          stateCode: backgroundConversation.stateCode,
+          userId,
+          gender,
+          lookingFor: null,
+          inConversation: true,
+        }
+      : null
+  );
+
+  useEffect(() => {
+    if (!backgroundConversation) return;
+
+    reportLobbyState(
+      backgroundConversation.ownerKey,
+      backgroundConversation.stateCode
+    );
+
+    return () => {
+      reportLobbyState(backgroundConversation.ownerKey, null);
     };
-  }, [
-    activeConversations,
-    gender,
-    reportLobbyState,
-    tabs,
-    updatePresence,
-    userId,
-  ]);
+  }, [backgroundConversation, reportLobbyState]);
 
   return null;
 }
