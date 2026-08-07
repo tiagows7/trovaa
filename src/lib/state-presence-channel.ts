@@ -8,6 +8,7 @@ import {
 
 type Entry = {
   channel: RealtimeChannel;
+  supabase: SupabaseClient;
   stateCode: string;
   userId: string;
   subscribed: boolean;
@@ -62,12 +63,24 @@ export async function trackManagedStatePresence(
   userId: string,
   track: StatePresenceTrack
 ) {
-  const entry = entries.get(entryKey(stateCode, userId));
+  const key = entryKey(stateCode, userId);
+  const entry = entries.get(key);
   if (!entry) {
     return false;
   }
 
-  await waitForSubscribe(entry);
+  try {
+    await waitForSubscribe(entry);
+  } catch {
+    entries.delete(key);
+    void entry.supabase.removeChannel(entry.channel);
+    return false;
+  }
+
+  if (!entries.has(key)) {
+    return false;
+  }
+
   await applyStateChannelTrack(entry.channel, track);
   notifyEntry(entry);
   return true;
@@ -103,6 +116,7 @@ export async function acquireStatePresenceChannel(
 
     entry = {
       channel,
+      supabase,
       stateCode: normalizedState,
       userId,
       subscribed: false,
@@ -131,7 +145,7 @@ export async function acquireStatePresenceChannel(
         failed.subscribed = false;
         rejectReady(new Error(`Presence channel ${status}`));
         entries.delete(key);
-        void supabase.removeChannel(failed.channel);
+        void failed.supabase.removeChannel(failed.channel);
         notifyEntry(failed);
       }
     });
@@ -154,7 +168,7 @@ export async function acquireStatePresenceChannel(
     }
 
     void current.channel.untrack().catch(() => undefined);
-    supabase.removeChannel(current.channel);
+    void current.supabase.removeChannel(current.channel);
     entries.delete(key);
   };
 }

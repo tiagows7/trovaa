@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import { getDisplayName } from "@/lib/anonymous-names";
 import { getConnectedListTitle } from "@/lib/matching";
 import {
-  filterVisibleUsersByGender,
+  filterMatchableUsers,
   getUnavailableMatchHint,
   getUserAvailability,
   isUserConnectable,
@@ -66,8 +66,14 @@ export function ConnectedUsersList({
   const [feedback, setFeedback] = useState<string | null>(null);
 
   const visibleUsers = useMemo(
-    () => filterVisibleUsersByGender(users, preferredGender),
-    [users, preferredGender]
+    () =>
+      filterMatchableUsers(
+        users,
+        viewerGender,
+        preferredGender,
+        viewerLookingFor
+      ),
+    [preferredGender, users, viewerGender, viewerLookingFor]
   );
 
   const visibleUserIds = useMemo(
@@ -207,7 +213,7 @@ export function ConnectedUsersList({
             </p>
             <p className="mt-2 text-xs text-slate-400">
               {presenceStatus === "connected"
-                ? "Aguarde — quando alguém entrar na sala, aparecerá aqui automaticamente."
+                ? "Aguarde — quando alguém compatível entrar na sala, aparecerá aqui automaticamente."
                 : "Assim que a conexão for estabelecida, a lista começa a atualizar."}
             </p>
           </div>

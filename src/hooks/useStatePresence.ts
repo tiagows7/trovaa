@@ -92,6 +92,7 @@ export function useStatePresence(
     let active = true;
     let retryTimer: number | null = null;
     let releaseChannel: (() => void) | null = null;
+    let reconnecting = false;
 
     async function syncTrack() {
       if (!active) return false;
@@ -104,14 +105,21 @@ export function useStatePresence(
 
       if (tracked) {
         refreshOnlineUsers();
+        return true;
       }
 
-      return tracked;
+      if (releaseChannel) {
+        releaseChannel();
+        releaseChannel = null;
+      }
+
+      return false;
     }
 
     async function connect() {
-      if (!active) return;
+      if (!active || reconnecting) return;
 
+      reconnecting = true;
       setPresenceStatus("connecting");
 
       try {
@@ -152,14 +160,33 @@ export function useStatePresence(
             void connect();
           }
         }, 2000);
+      } finally {
+        reconnecting = false;
+      }
+    }
+
+    async function maintainPresence() {
+      if (!active) return;
+
+      const tracked = await syncTrack();
+      if (!tracked && active && !reconnecting) {
+        setPresenceStatus("error");
+        if (retryTimer) {
+          window.clearTimeout(retryTimer);
+        }
+        retryTimer = window.setTimeout(() => {
+          if (active) {
+            void connect();
+          }
+        }, 1000);
       }
     }
 
     void connect();
 
     const interval = window.setInterval(() => {
-      void syncTrack();
-    }, 5000);
+      void maintainPresence();
+    }, 2000);
 
     return () => {
       active = false;
@@ -185,6 +212,8 @@ export function useStatePresence(
   useEffect(() => {
     if (presenceStatus !== "connected" || !userId || !gender) return;
 
+    refreshOnlineUsers();
+
     void trackManagedStatePresence(normalizedState, userId, trackRef.current).then(
       (tracked) => {
         if (tracked) {
@@ -198,31 +227,6 @@ export function useStatePresence(
     isVip,
     lookingFor,
     normalizedState,
-    presenceStatus,
-    refreshOnlineUsers,
-    userId,
-  ]);
-
-  useEffect(() => {
-    if (presenceStatus !== "connected" || onlineUsers.length > 0) return;
-
-    refreshOnlineUsers();
-
-    const interval = window.setInterval(() => {
-      refreshOnlineUsers();
-      void trackManagedStatePresence(
-        normalizedState,
-        userId,
-        trackRef.current
-      );
-    }, 1500);
-
-    return () => {
-      window.clearInterval(interval);
-    };
-  }, [
-    normalizedState,
-    onlineUsers.length,
     presenceStatus,
     refreshOnlineUsers,
     userId,
