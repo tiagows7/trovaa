@@ -167,9 +167,9 @@ export function MatchFlow({
           </button>
           <p className="truncate text-sm font-medium text-slate-700 dark:text-slate-200">
             {stateName} ({stateCode})
-            {onlineUsers.length > 0 && (
+            {presenceStatus === "connected" && (
               <span className="ml-2 text-emerald-600 dark:text-emerald-400">
-                · {onlineUsers.length} online
+                · {onlineUsers.length + 1} online
               </span>
             )}
           </p>
@@ -188,15 +188,19 @@ export function MatchFlow({
                 Seu perfil:{" "}
                 <strong>{getPartnerGenderLabel(userGender)}</strong>. Escolha com
                 quem quer conversar para ver a lista e enviar pedido de conexão.
-                {onlineUsers.length > 0 && (
+                {presenceStatus === "connected" && (
                   <span className="mt-1 block text-emerald-600 dark:text-emerald-400">
-                    {onlineUsers.length} pessoa(s) online nesta sala agora
-                    {presenceStatus === "connecting" ? " (atualizando…)" : ""}.
+                    {onlineUsers.length + 1} pessoa(s) nesta sala (incluindo você).
                   </span>
                 )}
-                {presenceStatus === "connecting" && onlineUsers.length === 0 && (
+                {presenceStatus === "connecting" && (
                   <span className="mt-1 block text-slate-500 dark:text-slate-400">
-                    Carregando quem está online…
+                    Conectando você à sala…
+                  </span>
+                )}
+                {presenceStatus === "error" && (
+                  <span className="mt-1 block text-amber-600 dark:text-amber-400">
+                    Reconectando à sala… aguarde alguns segundos.
                   </span>
                 )}
               </p>

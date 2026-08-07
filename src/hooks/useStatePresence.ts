@@ -1,13 +1,14 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
-import type { RealtimeChannel } from "@supabase/supabase-js";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePlatformPresence } from "@/contexts/PlatformPresenceContext";
+import { createClient } from "@/lib/supabase/client";
 import {
-  applyStateChannelTrack,
-  readStateChannelUsers,
-} from "@/hooks/useStateChannelTracker";
-import { createClient, prepareSupabaseRealtimeAuth } from "@/lib/supabase/client";
+  acquireStatePresenceChannel,
+  readManagedStateUsers,
+  trackManagedStatePresence,
+} from "@/lib/state-presence-channel";
+import { useSupabaseRealtimeAuth } from "@/hooks/useSupabaseRealtimeAuth";
 import type { ProfileGender } from "@/types/database";
 
 export type PresenceUser = {
@@ -26,14 +27,12 @@ export function useStatePresence(
   options?: { inConversation?: boolean; isVip?: boolean }
 ) {
   const supabase = useMemo(() => createClient(), []);
+  const authReady = useSupabaseRealtimeAuth(supabase);
   const { reportLobbyState } = usePlatformPresence();
   const [onlineUsers, setOnlineUsers] = useState<PresenceUser[]>([]);
   const [presenceStatus, setPresenceStatus] = useState<
     "idle" | "connecting" | "connected" | "error"
   >("idle");
-
-  const channelRef = useRef<RealtimeChannel | null>(null);
-  const subscribedRef = useRef(false);
 
   const ownerKey = useMemo(
     () => `match:${stateCode.toUpperCase()}`,
@@ -62,6 +61,13 @@ export function useStatePresence(
     stateCode: normalizedState,
   };
 
+  const refreshOnlineUsers = useCallback(() => {
+    if (!userId || !normalizedState) return;
+
+    const next = readManagedStateUsers(normalizedState, userId);
+    setOnlineUsers(next);
+  }, [normalizedState, userId]);
+
   useEffect(() => {
     if (!stateCode || !userId || !gender) {
       reportLobbyState(ownerKey, null);
@@ -76,128 +82,115 @@ export function useStatePresence(
   }, [gender, normalizedState, ownerKey, reportLobbyState, stateCode, userId]);
 
   useEffect(() => {
-    if (!stateCode || !userId || !gender) {
-      setOnlineUsers([]);
-      setPresenceStatus("idle");
+    if (!authReady || !stateCode || !userId || !gender) {
+      if (!stateCode || !userId || !gender) {
+        setOnlineUsers([]);
+        setPresenceStatus("idle");
+      }
       return;
     }
 
     let active = true;
     let retryTimer: number | null = null;
-
-    function refreshOnlineUsers() {
-      if (!channelRef.current || !subscribedRef.current) return;
-      setOnlineUsers(readStateChannelUsers(channelRef.current, userId));
-    }
-
-    async function syncTrack() {
-      const channel = channelRef.current;
-      const track = trackRef.current;
-      if (!channel || !subscribedRef.current || !track.gender) return;
-
-      try {
-        await applyStateChannelTrack(channel, track);
-        refreshOnlineUsers();
-      } catch {
-        // channel may be reconnecting
-      }
-    }
+    let releaseChannel: (() => void) | null = null;
 
     async function connect() {
       if (!active) return;
 
       setPresenceStatus("connecting");
 
-      const authed = await prepareSupabaseRealtimeAuth(supabase);
-      if (!active) return;
+      try {
+        releaseChannel?.();
+        releaseChannel = await acquireStatePresenceChannel(
+          supabase,
+          normalizedState,
+          userId,
+          refreshOnlineUsers
+        );
 
-      if (!authed) {
+        if (!active) {
+          releaseChannel();
+          releaseChannel = null;
+          return;
+        }
+
+        setPresenceStatus("connected");
+        await trackManagedStatePresence(normalizedState, userId, trackRef.current);
+        refreshOnlineUsers();
+
+        for (const delay of [250, 750, 1500, 3000]) {
+          window.setTimeout(() => {
+            if (active) {
+              void trackManagedStatePresence(
+                normalizedState,
+                userId,
+                trackRef.current
+              ).then(() => refreshOnlineUsers());
+            }
+          }, delay);
+        }
+      } catch {
+        if (!active) return;
         setPresenceStatus("error");
         retryTimer = window.setTimeout(() => {
           if (active) {
             void connect();
           }
         }, 2000);
-        return;
       }
-
-      const existing = channelRef.current;
-      if (existing) {
-        void existing.untrack().catch(() => undefined);
-        supabase.removeChannel(existing);
-        channelRef.current = null;
-        subscribedRef.current = false;
-      }
-
-      const channel = supabase.channel(`state:${normalizedState}`, {
-        config: { presence: { key: userId } },
-      });
-
-      channel.on("presence", { event: "sync" }, refreshOnlineUsers);
-      channel.on("presence", { event: "join" }, refreshOnlineUsers);
-      channel.on("presence", { event: "leave" }, refreshOnlineUsers);
-
-      channel.subscribe(async (status: string) => {
-        if (!active) return;
-
-        if (status === "SUBSCRIBED") {
-          subscribedRef.current = true;
-          setPresenceStatus("connected");
-          await syncTrack();
-          return;
-        }
-
-        if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
-          subscribedRef.current = false;
-          setPresenceStatus("error");
-          retryTimer = window.setTimeout(() => {
-            if (active) {
-              void connect();
-            }
-          }, 2000);
-        }
-      });
-
-      channelRef.current = channel;
     }
 
     void connect();
 
-    const interval = window.setInterval(refreshOnlineUsers, 2000);
+    const interval = window.setInterval(() => {
+      void trackManagedStatePresence(
+        normalizedState,
+        userId,
+        trackRef.current
+      ).then(() => refreshOnlineUsers());
+    }, 5000);
 
     return () => {
       active = false;
-      subscribedRef.current = false;
       if (retryTimer) {
         window.clearTimeout(retryTimer);
       }
       window.clearInterval(interval);
-
-      const channel = channelRef.current;
-      if (channel) {
-        void channel.untrack().catch(() => undefined);
-        supabase.removeChannel(channel);
-        channelRef.current = null;
-      }
-
+      releaseChannel?.();
+      releaseChannel = null;
       setOnlineUsers([]);
       setPresenceStatus("idle");
     };
-  }, [gender, normalizedState, stateCode, supabase, userId]);
+  }, [
+    authReady,
+    gender,
+    normalizedState,
+    refreshOnlineUsers,
+    stateCode,
+    supabase,
+    userId,
+  ]);
 
   useEffect(() => {
-    if (!subscribedRef.current || !channelRef.current || !gender) return;
+    if (presenceStatus !== "connected" || !userId || !gender) return;
 
-    void applyStateChannelTrack(channelRef.current, trackRef.current)
-      .then(() => {
-        if (channelRef.current && subscribedRef.current) {
-          setOnlineUsers(
-            readStateChannelUsers(channelRef.current, trackRef.current.userId)
-          );
+    void trackManagedStatePresence(normalizedState, userId, trackRef.current).then(
+      (tracked) => {
+        if (tracked) {
+          refreshOnlineUsers();
         }
-      })
-      .catch(() => undefined);
-  }, [gender, inConversation, isVip, lookingFor, userId]);
+      }
+    );
+  }, [
+    gender,
+    inConversation,
+    isVip,
+    lookingFor,
+    normalizedState,
+    presenceStatus,
+    refreshOnlineUsers,
+    userId,
+  ]);
 
   return { onlineUsers, presenceStatus };
 }

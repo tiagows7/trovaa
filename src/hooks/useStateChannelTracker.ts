@@ -1,8 +1,13 @@
 "use client";
 
 import { useEffect, useMemo, useRef } from "react";
-import type { RealtimeChannel, SupabaseClient } from "@supabase/supabase-js";
-import { createClient, prepareSupabaseRealtimeAuth } from "@/lib/supabase/client";
+import type { RealtimeChannel } from "@supabase/supabase-js";
+import { createClient } from "@/lib/supabase/client";
+import {
+  acquireStatePresenceChannel,
+  trackManagedStatePresence,
+} from "@/lib/state-presence-channel";
+import { useSupabaseRealtimeAuth } from "@/hooks/useSupabaseRealtimeAuth";
 import type { ProfileGender } from "@/types/database";
 
 export type StatePresenceTrack = {
@@ -37,113 +42,117 @@ export function useStateChannelTracker(
   options?: { onSync?: () => void }
 ) {
   const supabase = useMemo(() => createClient(), []);
-  const channelRef = useRef<RealtimeChannel | null>(null);
-  const subscribedRef = useRef(false);
+  const authReady = useSupabaseRealtimeAuth(supabase);
   const trackRef = useRef(track);
   trackRef.current = track;
+  const onSyncRef = useRef(options?.onSync);
+  onSyncRef.current = options?.onSync;
 
   useEffect(() => {
-    if (!track) {
-      subscribedRef.current = false;
-      const channel = channelRef.current;
-      if (channel) {
-        void channel.untrack().catch(() => undefined);
-        supabase.removeChannel(channel);
-        channelRef.current = null;
-      }
+    if (!authReady || !track) {
       return;
     }
 
     let active = true;
     let retryTimer: number | null = null;
-    const normalizedState = track.stateCode.toUpperCase();
+    let releaseChannel: (() => void) | null = null;
 
-    async function connect() {
-      const authed = await prepareSupabaseRealtimeAuth(supabase);
+    const notify = () => {
+      onSyncRef.current?.();
+    };
+
+    async function connect(current: TrackOptions) {
       if (!active || !trackRef.current) return;
 
-      if (!authed) {
-        retryTimer = window.setTimeout(() => {
-          if (active && trackRef.current) {
-            void connect();
-          }
-        }, 2000);
-        return;
-      }
+      try {
+        releaseChannel?.();
+        releaseChannel = await acquireStatePresenceChannel(
+          supabase,
+          current.stateCode,
+          current.userId,
+          notify
+        );
 
-      if (channelRef.current) {
-        void channelRef.current.untrack().catch(() => undefined);
-        supabase.removeChannel(channelRef.current);
-        channelRef.current = null;
-      }
-
-      const channel = supabase.channel(`state:${normalizedState}`, {
-        config: { presence: { key: trackRef.current.userId } },
-      });
-
-      const notify = () => options?.onSync?.();
-
-      channel.on("presence", { event: "sync" }, notify);
-      channel.on("presence", { event: "join" }, notify);
-      channel.on("presence", { event: "leave" }, notify);
-
-      channel.subscribe(async (status: string) => {
-        if (!active || !trackRef.current) return;
-
-        if (status === "SUBSCRIBED") {
-          subscribedRef.current = true;
-          try {
-            await applyStateChannelTrack(channel, trackRef.current);
-            notify();
-          } catch {
-            subscribedRef.current = false;
-          }
+        if (!active || !trackRef.current) {
+          releaseChannel();
+          releaseChannel = null;
           return;
         }
 
-        if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
-          subscribedRef.current = false;
-          retryTimer = window.setTimeout(() => {
-            if (active && trackRef.current) {
-              void connect();
-            }
-          }, 2000);
-        }
-      });
+        await trackManagedStatePresence(
+          current.stateCode,
+          current.userId,
+          trackRef.current
+        );
+        notify();
 
-      channelRef.current = channel;
+        for (const delay of [250, 750, 1500]) {
+          window.setTimeout(() => {
+            if (active && trackRef.current) {
+              void trackManagedStatePresence(
+                trackRef.current.stateCode,
+                trackRef.current.userId,
+                trackRef.current
+              ).then(() => notify());
+            }
+          }, delay);
+        }
+      } catch {
+        if (!active) return;
+        retryTimer = window.setTimeout(() => {
+          if (active && trackRef.current) {
+            void connect(trackRef.current);
+          }
+        }, 2000);
+      }
     }
 
-    void connect();
+    void connect(track);
 
     const interval = window.setInterval(() => {
-      if (!subscribedRef.current || !channelRef.current || !trackRef.current) {
-        return;
-      }
+      if (!trackRef.current) return;
 
-      void applyStateChannelTrack(channelRef.current, trackRef.current).catch(
-        () => undefined
-      );
+      void trackManagedStatePresence(
+        trackRef.current.stateCode,
+        trackRef.current.userId,
+        trackRef.current
+      ).then(() => notify());
     }, 5000);
 
     return () => {
       active = false;
-      subscribedRef.current = false;
       if (retryTimer) {
         window.clearTimeout(retryTimer);
       }
       window.clearInterval(interval);
-
-      const channel = channelRef.current;
-      if (channel) {
-        void channel.untrack().catch(() => undefined);
-        supabase.removeChannel(channel);
-        channelRef.current = null;
-      }
+      releaseChannel?.();
+      releaseChannel = null;
     };
   }, [
-    options?.onSync,
+    authReady,
     supabase,
+    track?.gender,
+    track?.inConversation,
+    track?.isVip,
+    track?.lookingFor,
+    track?.stateCode,
+    track?.userId,
+  ]);
+
+  useEffect(() => {
+    if (!authReady || !trackRef.current) return;
+
+    void trackManagedStatePresence(
+      trackRef.current.stateCode,
+      trackRef.current.userId,
+      trackRef.current
+    ).then((tracked) => {
+      if (tracked) {
+        onSyncRef.current?.();
+      }
+    });
+  }, [
+    authReady,
     track?.gender,
     track?.inConversation,
     track?.isVip,

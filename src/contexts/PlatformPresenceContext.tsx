@@ -21,12 +21,14 @@ const PLATFORM_PRESENCE_CHANNEL = "platform:online";
 type PlatformPresenceContextValue = {
   onlineUsers: Map<string, string | null>;
   countsByState: Map<string, number>;
+  viewerStateCode: string | null;
   reportLobbyState: (ownerKey: string, stateCode: string | null) => void;
 };
 
 const PlatformPresenceContext = createContext<PlatformPresenceContextValue>({
   onlineUsers: new Map(),
   countsByState: new Map(),
+  viewerStateCode: null,
   reportLobbyState: () => {},
 });
 
@@ -84,6 +86,15 @@ export function PlatformPresenceProvider({ children }: { children: ReactNode }) 
     pathname.startsWith("/salas") ||
     pathname.startsWith("/chat") ||
     pathname.startsWith("/conversa");
+
+  const viewerStateCode = useMemo(() => {
+    void lobbyStateVersion;
+    if (!userId || !isActiveRoute) {
+      return null;
+    }
+
+    return mergeLobbyState(lobbyStateOwnersRef.current, pathnameState);
+  }, [isActiveRoute, lobbyStateVersion, pathnameState, userId]);
 
   userIdRef.current = userId;
 
@@ -241,8 +252,15 @@ export function PlatformPresenceProvider({ children }: { children: ReactNode }) 
       }
     }
 
-    return { onlineUsers, countsByState, reportLobbyState };
-  }, [onlineUsers, reportLobbyState]);
+    if (viewerStateCode) {
+      countsByState.set(
+        viewerStateCode,
+        (countsByState.get(viewerStateCode) ?? 0) + 1
+      );
+    }
+
+    return { onlineUsers, countsByState, viewerStateCode, reportLobbyState };
+  }, [onlineUsers, reportLobbyState, viewerStateCode]);
 
   return (
     <PlatformPresenceContext.Provider value={value}>
@@ -274,4 +292,21 @@ export function getStateLobbyCount(
   stateCode: string
 ) {
   return countsByState.get(stateCode.toUpperCase()) ?? 0;
+}
+
+export function getStateLobbyDisplayCount(options: {
+  stateCode: string;
+  countsByState: Map<string, number>;
+  isActive?: boolean;
+  othersInActiveState?: number;
+}) {
+  const code = options.stateCode.toUpperCase();
+  const platformCount = getStateLobbyCount(options.countsByState, code);
+
+  if (options.isActive) {
+    const channelTotal = (options.othersInActiveState ?? 0) + 1;
+    return Math.max(platformCount, channelTotal);
+  }
+
+  return platformCount;
 }

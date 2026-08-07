@@ -517,25 +517,20 @@ export function StatePresenceProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    bootstrapPresence();
-
-    const interval = window.setInterval(() => {
-      bootstrapPresence();
-    }, 3000);
-
     function handleVisibilityChange() {
       if (document.visibilityState === "visible") {
-        bootstrapPresence();
+        for (const stateCode of ownersByStateRef.current.keys()) {
+          void applyTrack(stateCode);
+        }
       }
     }
 
     document.addEventListener("visibilitychange", handleVisibilityChange);
 
     return () => {
-      window.clearInterval(interval);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
-  }, [authReady, activeStateCode, bootstrapPresence, isActiveRoute, userId]);
+  }, [applyTrack, isActiveRoute]);
 
   useEffect(() => {
     if (isActiveRoute) {

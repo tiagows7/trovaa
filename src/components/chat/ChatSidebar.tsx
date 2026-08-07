@@ -17,7 +17,7 @@ import type { SavedUserEntry } from "@/lib/saved-users";
 import { fetchSavedUsers } from "@/lib/saved-users";
 import {
   getSavedContactOnlineState,
-  getStateLobbyCount,
+  getStateLobbyDisplayCount,
   isSavedContactOnline,
   usePlatformPresence,
 } from "@/contexts/PlatformPresenceContext";
@@ -171,11 +171,16 @@ export function ChatSidebar({
   }
 
   function renderStateCountBadge(stateCode: string, isActive: boolean) {
-    const platformCount = getStateLobbyCount(countsByState, stateCode);
-    const connectedCount =
-      isActive && activeStateOnlineCount != null
-        ? Math.max(platformCount, activeStateOnlineCount)
-        : platformCount;
+    const connectedCount = getStateLobbyDisplayCount({
+      stateCode,
+      countsByState,
+      isActive,
+      othersInActiveState:
+        isActive && activeStateOnlineCount != null
+          ? activeStateOnlineCount
+          : undefined,
+    });
+
     if (connectedCount <= 0) return null;
 
     return (
