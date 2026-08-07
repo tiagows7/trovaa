@@ -147,6 +147,7 @@ export function MatchFlow({
       <ChatSidebar
         userId={userId}
         activeStateCode={stateCode}
+        activeStateOnlineCount={onlineUsers.length}
         initialSavedUsers={initialSavedUsers}
         isOpen={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
@@ -166,6 +167,11 @@ export function MatchFlow({
           </button>
           <p className="truncate text-sm font-medium text-slate-700 dark:text-slate-200">
             {stateName} ({stateCode})
+            {onlineUsers.length > 0 && (
+              <span className="ml-2 text-emerald-600 dark:text-emerald-400">
+                · {onlineUsers.length} online
+              </span>
+            )}
           </p>
         </div>
 
@@ -308,6 +314,7 @@ export function MatchFlow({
               blockOtherConnections={false}
               loadingTargetId={loadingTargetId}
               onSelect={startConversation}
+              onUnavailableSelect={setError}
               onBack={() => {
                 setStep("choose");
                 setSelectedGender(null);

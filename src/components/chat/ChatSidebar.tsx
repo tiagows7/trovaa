@@ -26,6 +26,7 @@ import { useOptionalConversationTabs } from "@/contexts/ConversationTabsContext"
 type ChatSidebarProps = {
   userId: string;
   activeStateCode?: string;
+  activeStateOnlineCount?: number;
   initialSavedUsers: SavedUserEntry[];
   isOpen: boolean;
   onClose: () => void;
@@ -38,6 +39,7 @@ type SidebarView = "saved" | "all";
 export function ChatSidebar({
   userId,
   activeStateCode = "",
+  activeStateOnlineCount,
   initialSavedUsers,
   isOpen,
   onClose,
@@ -169,7 +171,11 @@ export function ChatSidebar({
   }
 
   function renderStateCountBadge(stateCode: string, isActive: boolean) {
-    const connectedCount = getStateLobbyCount(countsByState, stateCode);
+    const platformCount = getStateLobbyCount(countsByState, stateCode);
+    const connectedCount =
+      isActive && activeStateOnlineCount != null
+        ? Math.max(platformCount, activeStateOnlineCount)
+        : platformCount;
     if (connectedCount <= 0) return null;
 
     return (

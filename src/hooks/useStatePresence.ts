@@ -44,6 +44,37 @@ export function useStatePresence(
   const inConversation = options?.inConversation ?? false;
   const isVip = options?.isVip ?? false;
 
+  const trackRef = useRef({
+    userId,
+    gender: gender as ProfileGender,
+    lookingFor,
+    inConversation,
+    isVip,
+    stateCode: normalizedState,
+  });
+
+  trackRef.current = {
+    userId,
+    gender: gender as ProfileGender,
+    lookingFor,
+    inConversation,
+    isVip,
+    stateCode: normalizedState,
+  };
+
+  useEffect(() => {
+    if (!stateCode || !userId || !gender) {
+      reportLobbyState(ownerKey, null);
+      return;
+    }
+
+    reportLobbyState(ownerKey, normalizedState);
+
+    return () => {
+      reportLobbyState(ownerKey, null);
+    };
+  }, [gender, normalizedState, ownerKey, reportLobbyState, stateCode, userId]);
+
   useEffect(() => {
     if (!stateCode || !userId || !gender) {
       setOnlineUsers([]);
@@ -59,9 +90,22 @@ export function useStatePresence(
       setOnlineUsers(readStateChannelUsers(channelRef.current, userId));
     }
 
-    const profileGender = gender;
+    async function syncTrack() {
+      const channel = channelRef.current;
+      const track = trackRef.current;
+      if (!channel || !subscribedRef.current || !track.gender) return;
+
+      try {
+        await applyStateChannelTrack(channel, track);
+        refreshOnlineUsers();
+      } catch {
+        // channel may be reconnecting
+      }
+    }
 
     async function connect() {
+      if (!active) return;
+
       setPresenceStatus("connecting");
 
       const authed = await prepareSupabaseRealtimeAuth(supabase);
@@ -75,6 +119,14 @@ export function useStatePresence(
           }
         }, 2000);
         return;
+      }
+
+      const existing = channelRef.current;
+      if (existing) {
+        void existing.untrack().catch(() => undefined);
+        supabase.removeChannel(existing);
+        channelRef.current = null;
+        subscribedRef.current = false;
       }
 
       const channel = supabase.channel(`state:${normalizedState}`, {
@@ -91,22 +143,7 @@ export function useStatePresence(
         if (status === "SUBSCRIBED") {
           subscribedRef.current = true;
           setPresenceStatus("connected");
-
-          try {
-            await applyStateChannelTrack(channel, {
-              stateCode: normalizedState,
-              userId,
-              gender: profileGender,
-              lookingFor,
-              inConversation,
-              isVip,
-            });
-          } catch {
-            setPresenceStatus("error");
-            return;
-          }
-
-          refreshOnlineUsers();
+          await syncTrack();
           return;
         }
 
@@ -122,7 +159,6 @@ export function useStatePresence(
       });
 
       channelRef.current = channel;
-      reportLobbyState(ownerKey, normalizedState);
     }
 
     void connect();
@@ -136,7 +172,6 @@ export function useStatePresence(
         window.clearTimeout(retryTimer);
       }
       window.clearInterval(interval);
-      reportLobbyState(ownerKey, null);
 
       const channel = channelRef.current;
       if (channel) {
@@ -148,42 +183,21 @@ export function useStatePresence(
       setOnlineUsers([]);
       setPresenceStatus("idle");
     };
-  }, [
-    gender,
-    normalizedState,
-    ownerKey,
-    reportLobbyState,
-    stateCode,
-    supabase,
-    userId,
-  ]);
+  }, [gender, normalizedState, stateCode, supabase, userId]);
 
   useEffect(() => {
     if (!subscribedRef.current || !channelRef.current || !gender) return;
 
-    void applyStateChannelTrack(channelRef.current, {
-      stateCode: normalizedState,
-      userId,
-      gender,
-      lookingFor,
-      inConversation,
-      isVip,
-    })
+    void applyStateChannelTrack(channelRef.current, trackRef.current)
       .then(() => {
-        if (channelRef.current) {
-          setOnlineUsers(readStateChannelUsers(channelRef.current, userId));
+        if (channelRef.current && subscribedRef.current) {
+          setOnlineUsers(
+            readStateChannelUsers(channelRef.current, trackRef.current.userId)
+          );
         }
       })
       .catch(() => undefined);
-  }, [
-    gender,
-    inConversation,
-    isVip,
-    lookingFor,
-    normalizedState,
-    userId,
-    presenceStatus,
-  ]);
+  }, [gender, inConversation, isVip, lookingFor, userId]);
 
   return { onlineUsers, presenceStatus };
 }

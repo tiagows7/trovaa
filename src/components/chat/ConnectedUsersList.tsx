@@ -9,7 +9,9 @@ import {
   getUnavailableMatchHint,
   getUserAvailability,
   isUserConnectable,
+  type UserAvailability,
 } from "@/lib/presence-matching";
+import { NON_VIP_TARGET_BUSY_MESSAGE } from "@/lib/conversations";
 import { VIP_PRICE_LABEL } from "@/lib/vip-plan";
 import type { ProfileGender } from "@/types/database";
 import type { PresenceUser } from "@/hooks/useStatePresence";
@@ -24,6 +26,7 @@ type ConnectedUsersListProps = {
   blockOtherConnections?: boolean;
   loadingTargetId: string | null;
   onSelect: (userId: string) => void;
+  onUnavailableSelect?: (message: string) => void;
   onBack: () => void;
 };
 
@@ -53,10 +56,12 @@ export function ConnectedUsersList({
   blockOtherConnections = false,
   loadingTargetId,
   onSelect,
+  onUnavailableSelect,
   onBack,
 }: ConnectedUsersListProps) {
   const supabase = useMemo(() => createClient(), []);
   const [usernames, setUsernames] = useState<Record<string, string>>({});
+  const [feedback, setFeedback] = useState<string | null>(null);
 
   const visibleUsers = useMemo(
     () => filterVisibleUsersByGender(users, preferredGender),
@@ -99,11 +104,38 @@ export function ConnectedUsersList({
     };
   }, [supabase, viewerIsVip, visibleUserIds]);
 
+  function handleUserClick(
+    userId: string,
+    availability: UserAvailability,
+    isConnectable: boolean
+  ) {
+    if (loadingTargetId) return;
+
+    if (!isConnectable) {
+      const message =
+        availability === "busy_in_conversation"
+          ? NON_VIP_TARGET_BUSY_MESSAGE
+          : availability === "waiting_profile"
+            ? "Esta pessoa ainda não escolheu um perfil compatível na sala."
+            : "Esta pessoa não está disponível para conversar agora.";
+
+      setFeedback(message);
+      onUnavailableSelect?.(message);
+      return;
+    }
+
+    setFeedback(null);
+    onSelect(userId);
+  }
+
   return (
     <div className="mx-auto w-full max-w-lg">
       <button
         type="button"
-        onClick={onBack}
+        onClick={() => {
+          setFeedback(null);
+          onBack();
+        }}
         className="mb-6 text-sm font-medium text-violet-600 hover:underline dark:text-violet-300"
       >
         ← Voltar
@@ -136,6 +168,12 @@ export function ConnectedUsersList({
             Seja VIP por {VIP_PRICE_LABEL}/mês
           </a>{" "}
           para ver quem está online de verdade.
+        </p>
+      )}
+
+      {feedback && (
+        <p className="mt-4 rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:bg-amber-950/30 dark:text-amber-200">
+          {feedback}
         </p>
       )}
 
@@ -182,11 +220,12 @@ export function ConnectedUsersList({
                 key={user.userId}
                 type="button"
                 disabled={
-                  !isConnectable ||
-                  Boolean(loadingTargetId) ||
-                  (blockOtherConnections && !isPending)
+                  loadingTargetId === user.userId ||
+                  (blockOtherConnections && isConnectable && !isPending)
                 }
-                onClick={() => onSelect(user.userId)}
+                onClick={() =>
+                  handleUserClick(user.userId, availability, isConnectable)
+                }
                 className="flex w-full items-center justify-between rounded-2xl border border-slate-200 bg-white px-5 py-4 text-left transition hover:border-violet-300 hover:bg-violet-50 disabled:cursor-default disabled:opacity-80 disabled:hover:border-slate-200 disabled:hover:bg-white dark:border-slate-700 dark:bg-slate-900 dark:disabled:hover:border-slate-700 dark:disabled:hover:bg-slate-900 dark:hover:border-violet-700 dark:hover:bg-violet-950/30"
               >
                 <span className="flex items-center gap-3">
