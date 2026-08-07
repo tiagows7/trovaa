@@ -8,7 +8,12 @@ import { useStatePresence } from "@/hooks/useStatePresence";
 import { useUserProfileRoles } from "@/hooks/useUserProfileRoles";
 import { createClient } from "@/lib/supabase/client";
 import { getPartnerGenderLabel, PARTNER_GENDER_OPTIONS } from "@/lib/matching";
-import { filterConnectableUsers, countUsersByGender, countUsersInConversationByGender } from "@/lib/presence-matching";
+import {
+  countConnectableUsersByGender,
+  countMatchableUsersByGender,
+  countUsersByGender,
+  countUsersInConversationByGender,
+} from "@/lib/presence-matching";
 import { requestConnection } from "@/lib/connection-requests";
 import { useConnectionRequests } from "@/contexts/ConnectionRequestsContext";
 import { useConversationTabs } from "@/contexts/ConversationTabsContext";
@@ -197,14 +202,26 @@ export function MatchFlow({
                     onlineUsers,
                     option.value
                   );
-                  const matchCount = userGender
-                    ? filterConnectableUsers(
+                  const matchableCount = userGender
+                    ? countMatchableUsersByGender(
                         onlineUsers,
                         userGender,
                         option.value,
                         null
-                      ).length
+                      )
                     : 0;
+                  const connectableCount = userGender
+                    ? countConnectableUsersByGender(
+                        onlineUsers,
+                        userGender,
+                        option.value,
+                        null
+                      )
+                    : 0;
+                  const busyInConversationCount = Math.max(
+                    matchableCount - connectableCount,
+                    0
+                  );
 
                   return (
                   <button
@@ -229,18 +246,35 @@ export function MatchFlow({
                                 ({inConversationCount} em conversa)
                               </span>
                             )}
-                            {matchCount === 0 && (
+                            {matchableCount > 0 && (
+                              <span className="mt-1 block font-medium text-emerald-600 dark:text-emerald-400">
+                                {matchableCount} compatível(is) online agora
+                                {busyInConversationCount > 0 && (
+                                  <span className="text-violet-600 dark:text-violet-300">
+                                    {" "}
+                                    ({busyInConversationCount} em conversa
+                                    {connectableCount > 0
+                                      ? `, ${connectableCount} disponível(is) para conectar`
+                                      : ", indisponível(is) para convite"})
+                                  </span>
+                                )}
+                                {busyInConversationCount === 0 &&
+                                  connectableCount > 0 && (
+                                    <span>
+                                      {" "}
+                                      — {connectableCount} disponível(is) para
+                                      conectar
+                                    </span>
+                                  )}
+                              </span>
+                            )}
+                            {genderOnline > 0 && matchableCount === 0 && (
                               <span className="mt-1 block text-amber-600 dark:text-amber-400">
                                 Online, mas com filtro incompatível — peça para
                                 escolherem &quot;{option.label}&quot; ou o perfil
                                 oposto ao de vocês.
                               </span>
                             )}
-                          </span>
-                        )}
-                        {matchCount > 0 && (
-                          <span className="mt-1 block font-medium text-emerald-600 dark:text-emerald-400">
-                            {matchCount} disponível(is) para conversar
                           </span>
                         )}
                       </span>

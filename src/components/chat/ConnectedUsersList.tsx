@@ -147,7 +147,7 @@ export function ConnectedUsersList({
             </p>
             <p className="mt-2 text-xs text-slate-400">
               {users.length === 0
-                ? "Nenhuma outra pessoa online nesta sala. Todos precisam estar em /chat no mesmo estado (ex.: SP)."
+                ? "Nenhuma outra pessoa online nesta sala. Quem está em conversa também aparece aqui quando conectado."
                 : `Há ${users.length} pessoa(s) online neste estado, mas nenhuma com o perfil selecionado.`}
             </p>
             <p className="mt-2 text-xs text-slate-400">

@@ -55,11 +55,27 @@ export function useStateChannelTracker(
     }
 
     let active = true;
+    let retryTimer: number | null = null;
     const normalizedState = track.stateCode.toUpperCase();
 
     async function connect() {
       const authed = await prepareSupabaseRealtimeAuth(supabase);
-      if (!active || !authed || !trackRef.current) return;
+      if (!active || !trackRef.current) return;
+
+      if (!authed) {
+        retryTimer = window.setTimeout(() => {
+          if (active && trackRef.current) {
+            void connect();
+          }
+        }, 2000);
+        return;
+      }
+
+      if (channelRef.current) {
+        void channelRef.current.untrack().catch(() => undefined);
+        supabase.removeChannel(channelRef.current);
+        channelRef.current = null;
+      }
 
       const channel = supabase.channel(`state:${normalizedState}`, {
         config: { presence: { key: trackRef.current.userId } },
@@ -87,6 +103,11 @@ export function useStateChannelTracker(
 
         if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
           subscribedRef.current = false;
+          retryTimer = window.setTimeout(() => {
+            if (active && trackRef.current) {
+              void connect();
+            }
+          }, 2000);
         }
       });
 
@@ -108,6 +129,9 @@ export function useStateChannelTracker(
     return () => {
       active = false;
       subscribedRef.current = false;
+      if (retryTimer) {
+        window.clearTimeout(retryTimer);
+      }
       window.clearInterval(interval);
 
       const channel = channelRef.current;
@@ -160,12 +184,16 @@ export function readStateChannelUsers(
         presence.gender &&
         presence.user_id !== viewerUserId
       ) {
+        const inConversation = presence.in_conversation ?? false;
+        const isVip = presence.is_vip ?? false;
+        const existing = byId.get(presence.user_id);
+
         byId.set(presence.user_id, {
           userId: presence.user_id,
           gender: presence.gender,
-          lookingFor: presence.looking_for ?? null,
-          inConversation: presence.in_conversation ?? false,
-          isVip: presence.is_vip ?? false,
+          lookingFor: presence.looking_for ?? existing?.lookingFor ?? null,
+          inConversation: existing?.inConversation || inConversation,
+          isVip: existing?.isVip || isVip,
         });
       }
     }

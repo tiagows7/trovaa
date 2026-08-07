@@ -52,6 +52,7 @@ export function useStatePresence(
     }
 
     let active = true;
+    let retryTimer: number | null = null;
 
     function refreshOnlineUsers() {
       if (!channelRef.current || !subscribedRef.current) return;
@@ -68,6 +69,11 @@ export function useStatePresence(
 
       if (!authed) {
         setPresenceStatus("error");
+        retryTimer = window.setTimeout(() => {
+          if (active) {
+            void connect();
+          }
+        }, 2000);
         return;
       }
 
@@ -107,6 +113,11 @@ export function useStatePresence(
         if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
           subscribedRef.current = false;
           setPresenceStatus("error");
+          retryTimer = window.setTimeout(() => {
+            if (active) {
+              void connect();
+            }
+          }, 2000);
         }
       });
 
@@ -121,6 +132,9 @@ export function useStatePresence(
     return () => {
       active = false;
       subscribedRef.current = false;
+      if (retryTimer) {
+        window.clearTimeout(retryTimer);
+      }
       window.clearInterval(interval);
       reportLobbyState(ownerKey, null);
 
@@ -136,9 +150,6 @@ export function useStatePresence(
     };
   }, [
     gender,
-    inConversation,
-    isVip,
-    lookingFor,
     normalizedState,
     ownerKey,
     reportLobbyState,

@@ -83,6 +83,31 @@ export function countUsersInConversationByGender(
     .length;
 }
 
+export function countMatchableUsersByGender(
+  users: PresenceUser[],
+  viewerGender: ProfileGender,
+  preferredGender: ProfileGender,
+  viewerLookingFor: ProfileGender | null = null
+) {
+  return users.filter((user) =>
+    isMutualMatch(viewerGender, preferredGender, user, viewerLookingFor)
+  ).length;
+}
+
+export function countConnectableUsersByGender(
+  users: PresenceUser[],
+  viewerGender: ProfileGender,
+  preferredGender: ProfileGender,
+  viewerLookingFor: ProfileGender | null = null
+) {
+  return filterConnectableUsers(
+    users,
+    viewerGender,
+    preferredGender,
+    viewerLookingFor
+  ).filter((user) => user.gender === preferredGender).length;
+}
+
 export function filterVisibleUsersByGender(
   users: PresenceUser[],
   preferredGender: ProfileGender
