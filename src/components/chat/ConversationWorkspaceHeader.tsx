@@ -120,7 +120,7 @@ export function ConversationWorkspaceHeader() {
             })
           )}
 
-          {tabs.length > 0 && (
+          {tabs.length > 0 && isVip && (
             <button
               type="button"
               onClick={() => {
